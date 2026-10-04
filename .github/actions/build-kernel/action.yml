@@ -866,9 +866,13 @@ runs:
         retry_clone "https://github.com/WildKernels/kernel_patches.git" "main" "1"
         
         if [ "${{ env.OP_SUSFS }}" = true ]; then
-          echo "Using SUSFS branch/commit: $SUSFS_BRANCH"
-          if ! retry_fetch_archive "https://gitlab.com/simonpunk/susfs4ksu.git" "$SUSFS_BRANCH"; then
-            echo "::error::Failed to fetch SUSFS archive after multiple attempts"
+          echo "Using vendored SUSFS source: $SUSFS_BRANCH"
+          if [ -d "$GITHUB_WORKSPACE/vendor_susfs4ksu" ]; then
+            rm -rf "$SUSFS_FOLDER"
+            cp -a "$GITHUB_WORKSPACE/vendor_susfs4ksu" "$SUSFS_FOLDER"
+            echo "Vendored SUSFS source placed at $SUSFS_FOLDER"
+          else
+            echo "::error::Vendored SUSFS source not found at $GITHUB_WORKSPACE/vendor_susfs4ksu"
             exit 1
           fi
           echo "SUSFS_COMMIT_SHA=$SUSFS_BRANCH" >> $GITHUB_ENV
