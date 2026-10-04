@@ -895,6 +895,7 @@ runs:
         echo "::endgroup::"
 
     - name: Clean Up ABI Protected Exports
+      if: ${{ env.OP_PURE != 'true' }}
       shell: bash
       run: |
         echo "::group::Clean Up ABI Protected Exports"
@@ -905,6 +906,7 @@ runs:
         echo "::endgroup::"
 
     - name: Add KernelSU Next
+      if: ${{ env.OP_PURE != 'true' }}
       shell: bash
       if: ${{ inputs.ksu_type == 'KSUN' }}
       run: |
@@ -967,6 +969,7 @@ runs:
         echo "::endgroup::"
 
     - name: Add KernelSU
+      if: ${{ env.OP_PURE != 'true' }}
       shell: bash
       if: ${{ inputs.ksu_type == 'KSU' }}
       run: |
@@ -1312,6 +1315,7 @@ runs:
         echo "::endgroup::"
 
     - name: Apply KSU Hooks
+      if: ${{ env.OP_PURE != 'true' }}
       shell: bash
       if: ${{ env.NEED_HOOKS == 'true' }}
       run: |
@@ -1323,6 +1327,7 @@ runs:
         echo "::endgroup::"
 
     - name: Apply Other Patches
+      if: ${{ env.OP_PURE != 'true' }}
       shell: bash
       run: |
         set -euo pipefail
@@ -1520,6 +1525,7 @@ runs:
         echo "::endgroup::"
 
     - name: Apply NTSync Patch
+      if: ${{ env.OP_PURE != 'true' }}
       shell: bash
       if: ${{ env.OP_NTSYNC == 'true' }}
       run: |
@@ -1572,6 +1578,7 @@ runs:
         echo "::endgroup::"
 
     - name: Apply Unicode Fix Patch
+      if: ${{ env.OP_PURE != 'true' }}
       shell: bash
       if: ${{ env.OP_UNICODE == 'true' }}
       run: |
@@ -1589,6 +1596,7 @@ runs:
         fi
 
     - name: Add Tmpfs Support
+      if: ${{ env.OP_PURE != 'true' }}
       shell: bash
       run: |
         set -euo pipefail
@@ -1633,6 +1641,7 @@ runs:
         echo "::endgroup::"
 
     - name: Enable Important Net Schedulers (qdisc)
+      if: ${{ env.OP_PURE != 'true' }}
       shell: bash
       run: |
         set -euo pipefail
@@ -1698,6 +1707,7 @@ runs:
         EOF
 
     - name: Add Droidspaces support
+      if: ${{ env.OP_PURE != 'true' }}
       shell: bash
       if: ${{ env.OP_DS == 'true' }}
       run: |
@@ -1754,6 +1764,7 @@ runs:
         echo "::endgroup::"
 
     - name: Add Build based configs
+      if: ${{ env.OP_PURE != 'true' }}
       shell: bash
       run: |
         set -euo pipefail
@@ -1767,6 +1778,7 @@ runs:
         EOF
 
     - name: Add RUST build configs
+      if: ${{ env.OP_PURE != 'true' }}
       shell: bash
       if: ${{ env.OP_RUST_BUILD == 'true' }}
       run: |
@@ -1803,6 +1815,7 @@ runs:
         echo "CUSTOM_LOCALVERSION=$CUSTOM_LOCALVERSION" >> "$GITHUB_ENV"
 
     - name: Disable GPUEB
+      if: ${{ env.OP_PURE != 'true' }}
       shell: bash
       if: ${{ env.KERNEL_VER == '5.10' && (startsWith(env.OP_SOC, 'dimensity') || startsWith(env.OP_SOC, 'helio')) }}
       run: |
@@ -1811,6 +1824,7 @@ runs:
         sed -i '/obj-y.*gpueb/d' "$COMMON_KERNEL_FOLDER/drivers/gpu/mediatek/Makefile"
 
     - name: Apply Fake config.gz patch
+      if: ${{ env.OP_PURE != 'true' }}
       shell: bash
       run: |
         set -euo pipefail
@@ -1832,6 +1846,7 @@ runs:
         echo "CONFIG_FAKE_DISABLE=${CONFIG_STRING}" >> $GITHUB_ENV
     
     - name: Disable Vendor / Kernel Modules
+      if: ${{ env.OP_PURE != 'true' }}
       shell: bash
       run: |
         set -euo pipefail
