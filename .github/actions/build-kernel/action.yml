@@ -2007,7 +2007,7 @@ runs:
         
         case "$OP_BRANCH" in
           wild/sm8750|wild/sm8850|wild/sm8845)
-            KCFLAGS_EXTRA="-mcpu=oryon-1 ${KCFLAGS_EXTRA}"
+            KCFLAGS_EXTRA="${KCFLAGS_EXTRA}"
             ;;
         esac
         
