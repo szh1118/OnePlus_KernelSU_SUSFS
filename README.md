@@ -1,3 +1,29 @@
+> ## 📌 This fork: PixelOS (dodge) kernel
+>
+> A **PixelOS‑specific** build. Unlike upstream (which targets OnePlus **stock**/OxygenOS trees),
+> this fork is re‑pointed at the kernel tree the ROM was actually built from, so the kernel
+> release string matches the ROM exactly and its `vendor_dlkm` modules load.
+>
+> | | |
+> |---|---|
+> | Target ROM | `PixelOS_dodge-17.0-20260912-0535` (OnePlus 13 / `dodge`, Android 17) |
+> | Kernel | **`6.6.142-4k-gc568e18c7f62`** |
+> | Source | `LineageOS/android_kernel_oneplus_sm8750` @ `c568e18c7f62` + the ROM's own `.config` (extracted from `boot.img`) |
+> | Toolchain | ZyC clang **22** — clang 19 silently produces an unbootable kernel here |
+> | Vermagic | `6.6.142-4k-gc568e18c7f62 SMP preempt mod_unload modversions aarch64` |
+>
+> **✅ Included:** KernelSU‑Next (versionCode **33239**) · SUSFS **v2.2.0** · **BBG** (Baseband Guard)
+>
+> **❌ Not included:** **HMBIRD** (OnePlus fengchi SCX does not exist in this tree) · `opt` · Droidspaces · BBR/BBRv3 · TTL · IP_SET+IPv6 NAT · Unicode fix · NTSync
+>
+> **📱 Manager app:** install KernelSU‑Next **`v3.3.0` (33214)** — the kernel's code is 33239 (a dev build with no published APK); `v3.4.0` (33294) reports *"kernel update required"*.
+> **🔓 SUSFS hiding:** also install the userspace module `sidex15/ksu_module_susfs` (v2.2.0).
+> **📥 Flashing:** AnyKernel3 zip — writes the `boot` partition of the active slot only. Rollback: `fastboot flash boot_a/b boot.img` with the ROM's stock boot image.
+>
+> Ready-to-flash zip is in [Releases](../../releases). Verified booting on the target ROM (2026-10-05).
+
+---
+
 <div align="center">
 
 # 🔥 Wild Kernels for OnePlus (Oppo/Realme)
