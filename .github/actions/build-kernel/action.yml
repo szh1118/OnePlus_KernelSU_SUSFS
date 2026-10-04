@@ -2011,20 +2011,15 @@ runs:
             ;;
         esac
         
-        scripts/config --file "$OUT/.config" -e LTO_CLANG -d LTO_CLANG_NONE -d LTO_CLANG_THIN -d LTO_CLANG_FULL
+        scripts/config --file "$OUT/.config" -d LTO_CLANG -d LTO_CLANG_NONE -d LTO_CLANG_THIN -d LTO_CLANG_FULL -e LTO_NONE
         
-        case "${{ env.OP_LTO}}" in
-          "none") scripts/config --file "$OUT/.config" -e LTO_CLANG_NONE ;;
-          "thin") scripts/config --file "$OUT/.config" -e LTO_CLANG_THIN ;;
-          "full") scripts/config --file "$OUT/.config" -e LTO_CLANG_FULL ;;
-          *)
-            echo "::error::Unsupported LTO option: ${{ env.OP_LTO}}"
-            exit 1
-            ;;
-        esac
+        # LTO identical to ROM (CONFIG_LTO_NONE=y); OP_LTO case removed.
         
         
         make LD="$COMMON_KERNEL_FOLDER/ld-wrapper" HOSTLD="$COMMON_KERNEL_FOLDER/ld-wrapper" O="$OUT" olddefconfig
+        echo "===== EFFECTIVE CONFIG ====="
+        grep -E "^CONFIG_(LTO_NONE|LTO_CLANG|CFI_CLANG|LSM|KSU|KSU_SUSFS|BBG|MODVERSIONS|PSTORE_RAM|SECURITY_SELINUX)=" "$OUT/.config" || true
+        echo "============================"
         
         KCFLAGS="$KCFLAGS -Wno-error -pipe ${KCFLAGS_EXTRA}"
         KCPPFLAGS="$KCPPFLAGS -DCONFIG_OPTIMIZE_INLINING"
