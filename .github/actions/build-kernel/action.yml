@@ -380,6 +380,15 @@ runs:
         DEBUG_ZIP_NAME="debug_${OP_MODEL}_${OP_OS_VERSION}.zip"
         echo "DEBUG_ZIP_NAME=$DEBUG_ZIP_NAME" >> "$GITHUB_ENV"
 
+    - name: Apply ROM defconfig (PixelOS dodge 6.6.142)
+      shell: bash
+      run: |
+        set -euo pipefail
+        ROM_CONFIG="$GITHUB_WORKSPACE/configs/pixelos_dodge_6.6.142.config"
+        [ -f "$ROM_CONFIG" ] || { echo "::error::ROM config not found: $ROM_CONFIG"; exit 1; }
+        cp "$ROM_CONFIG" "$COMMON_KERNEL_FOLDER/arch/arm64/configs/gki_defconfig"
+        echo "Replaced gki_defconfig with ROM config ($(wc -l < "$COMMON_KERNEL_FOLDER/arch/arm64/configs/gki_defconfig") lines)"
+
     - name: Set Kernel build-tools to Path
       shell: bash
       run: |
@@ -1772,7 +1781,7 @@ runs:
         echo "Customize Kernel Branding"
         cd "$COMMON_KERNEL_FOLDER"
         mkdir -p out
-        CUSTOM_LOCALVERSION="-${ANDROID_VER}-${OP_UNAME}"
+        CUSTOM_LOCALVERSION="-4k-gc568e18c7f62"
         echo "CUSTOM_LOCALVERSION=$CUSTOM_LOCALVERSION" >> "$GITHUB_ENV"
 
     - name: Disable GPUEB
