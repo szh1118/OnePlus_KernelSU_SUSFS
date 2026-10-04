@@ -385,9 +385,23 @@ runs:
       run: |
         set -euo pipefail
         ROM_CONFIG="$GITHUB_WORKSPACE/configs/pixelos_dodge_6.6.142.config"
+        DEFCONFIG="$COMMON_KERNEL_FOLDER/arch/arm64/configs/gki_defconfig"
         [ -f "$ROM_CONFIG" ] || { echo "::error::ROM config not found: $ROM_CONFIG"; exit 1; }
-        cp "$ROM_CONFIG" "$COMMON_KERNEL_FOLDER/arch/arm64/configs/gki_defconfig"
-        echo "Replaced gki_defconfig with ROM config ($(wc -l < "$COMMON_KERNEL_FOLDER/arch/arm64/configs/gki_defconfig") lines)"
+        cp "$ROM_CONFIG" "$DEFCONFIG"
+        # BBG requires baseband_guard in CONFIG_LSM. The action edits the Kconfig
+        # default, but our .config sets CONFIG_LSM explicitly, so patch it here.
+        if grep -q '^CONFIG_LSM=' "$ROM_CONFIG"; then
+          cur=$(grep -m1 '^CONFIG_LSM=' "$ROM_CONFIG" | sed -e 's/^CONFIG_LSM=//' -e 's/^"//' -e 's/"$//')
+          case ",$cur," in
+            *",baseband_guard,"*) echo "CONFIG_LSM already contains baseband_guard" ;;
+            *)
+              new=$(printf '%s' "$cur" | sed 's/\bselinux\b/selinux,baseband_guard/')
+              [ "$new" = "$cur" ] && new="baseband_guard,$cur"
+              printf 'CONFIG_LSM="%s"\n' "$new" >> "$DEFCONFIG"
+              echo "Appended CONFIG_LSM=\"$new\"" ;;
+          esac
+        fi
+        echo "Replaced gki_defconfig with ROM config ($(wc -l < "$DEFCONFIG") lines)"
 
     - name: Set Kernel build-tools to Path
       shell: bash
