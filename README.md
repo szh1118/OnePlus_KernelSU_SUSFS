@@ -16,7 +16,7 @@
 >
 > **❌ Not included:** **HMBIRD** (OnePlus fengchi SCX does not exist in this tree) · `opt` · Droidspaces · BBR/BBRv3 · TTL · IP_SET+IPv6 NAT · Unicode fix · NTSync
 >
-> **📱 Manager app:** install KernelSU‑Next **`v3.3.0` (33214)** — the kernel's code is 33239 (a dev build with no published APK); `v3.4.0` (33294) reports *"kernel update required"*.
+> **📱 Manager app:** use the **exact matching APK attached to this release** — `KernelSU_Next_v3.3.0-25-g234f6e04_33239-release.apk` (versionCode **33239**, built from the very same commit as this kernel). Anything newer (e.g. `v3.4.0` / 33294) reports *"kernel update required"*.
 > **🔓 SUSFS hiding:** also install the userspace module `sidex15/ksu_module_susfs` (v2.2.0).
 > **📥 Flashing:** AnyKernel3 zip — writes the `boot` partition of the active slot only. Rollback: `fastboot flash boot_a/b boot.img` with the ROM's stock boot image.
 >
