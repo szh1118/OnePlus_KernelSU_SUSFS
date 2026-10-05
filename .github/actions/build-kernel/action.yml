@@ -401,6 +401,18 @@ runs:
               echo "Appended CONFIG_LSM=\"$new\"" ;;
           esac
         fi
+        # zram: make it built-in with LZ4 as the compiled default. The ROM ships zram.ko
+        # (module, default lzo-rle) from vendor_dlkm, which would shadow a module of ours,
+        # so build it in instead. lz4/zstd/lzo libs are already =y in the ROM config.
+        cat >> "$DEFCONFIG" <<'ZRAMCFG'
+CONFIG_ZSMALLOC=y
+CONFIG_ZRAM=y
+# CONFIG_ZRAM_DEF_COMP_LZORLE is not set
+# CONFIG_ZRAM_DEF_COMP_LZO is not set
+CONFIG_ZRAM_DEF_COMP_LZ4=y
+CONFIG_ZRAM_MULTI_COMP=y
+CONFIG_ZRAM_WRITEBACK=y
+ZRAMCFG
         echo "Replaced gki_defconfig with ROM config ($(wc -l < "$DEFCONFIG") lines)"
 
     - name: Set Kernel build-tools to Path
@@ -906,9 +918,8 @@ runs:
         echo "::endgroup::"
 
     - name: Add KernelSU Next
-      if: ${{ env.OP_PURE != 'true' }}
+      if: ${{ env.OP_PURE != 'true' && inputs.ksu_type == 'KSUN' }}
       shell: bash
-      if: ${{ inputs.ksu_type == 'KSUN' }}
       run: |
         set -euo pipefail
         echo "::group::Add KernelSU Next"
@@ -969,9 +980,8 @@ runs:
         echo "::endgroup::"
 
     - name: Add KernelSU
-      if: ${{ env.OP_PURE != 'true' }}
+      if: ${{ env.OP_PURE != 'true' && inputs.ksu_type == 'KSU' }}
       shell: bash
-      if: ${{ inputs.ksu_type == 'KSU' }}
       run: |
         set -euo pipefail
         echo "::group::Add KernelSU"
@@ -979,9 +989,9 @@ runs:
         echo "Adding KernelSU..."
         KSU_INPUT="${{ inputs.ksu_branch_or_hash }}"
         if [ -z "$KSU_INPUT" ]; then
-          curl --fail --location --proto '=https' -LSs "https://raw.githubusercontent.com/tiann/KernelSU/main/kernel/setup.sh" | bash -
+          curl --fail --location --proto '=https' -LSs "https://raw.githubusercontent.com/Baka-SU/BakaSU/refs/heads/main/kernel/setup.sh" | bash -
         else
-          curl --fail --location --proto '=https' -LSs "https://raw.githubusercontent.com/tiann/KernelSU/main/kernel/setup.sh" | bash -s "$KSU_INPUT"
+          curl --fail --location --proto '=https' -LSs "https://raw.githubusercontent.com/Baka-SU/BakaSU/refs/heads/main/kernel/setup.sh" | bash -s "$KSU_INPUT"
         fi
         git submodule update --init --recursive
         cd KernelSU/kernel
@@ -1455,6 +1465,13 @@ runs:
 
         ccache --set-config=extra_files_to_hash="$copied_modules"
         
+        cd "$COMMON_KERNEL_FOLDER"
+        for _cve in "$GITHUB_WORKSPACE"/patches/cve/*.patch; do
+          [ -f "$_cve" ] || continue
+          echo "Applying $(basename "$_cve")"
+          patch -p1 -t < "$_cve" || { echo "::warning::$(basename "$_cve") did not apply cleanly"; true; }
+        done
+
         echo "✅ Other patches applied"
         echo "::endgroup::"
 
