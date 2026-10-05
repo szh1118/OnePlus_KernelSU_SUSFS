@@ -1,175 +1,104 @@
-> ## 📌 This fork: PixelOS (dodge) kernel
->
-> A **PixelOS‑specific** build. Unlike upstream (which targets OnePlus **stock**/OxygenOS trees),
-> this fork is re‑pointed at the kernel tree the ROM was actually built from, so the kernel
-> release string matches the ROM exactly and its `vendor_dlkm` modules load.
->
-> | | |
-> |---|---|
-> | Target ROM | `PixelOS_dodge-17.0-20260912-0535` (OnePlus 13 / `dodge`, Android 17) |
-> | Kernel | **`6.6.142-4k-gc568e18c7f62`** |
-> | Source | `LineageOS/android_kernel_oneplus_sm8750` @ `c568e18c7f62` + the ROM's own `.config` (extracted from `boot.img`) |
-> | Toolchain | ZyC clang **22** — clang 19 silently produces an unbootable kernel here |
-> | Vermagic | `6.6.142-4k-gc568e18c7f62 SMP preempt mod_unload modversions aarch64` |
->
-> **✅ Included:** KernelSU‑Next (versionCode **33239**) · SUSFS **v2.2.0** · **BBG** (Baseband Guard)
->
-> **❌ Not included:** **HMBIRD** (OnePlus fengchi SCX does not exist in this tree) · `opt` · Droidspaces · BBR/BBRv3 · TTL · IP_SET+IPv6 NAT · Unicode fix · NTSync
->
-> **📱 Manager app:** use the **exact matching APK attached to this release** — `KernelSU_Next_v3.3.0-25-g234f6e04_33239-release.apk` (versionCode **33239**, built from the very same commit as this kernel). Anything newer (e.g. `v3.4.0` / 33294) reports *"kernel update required"*.
-> **🔓 SUSFS hiding:** also install the userspace module `sidex15/ksu_module_susfs` (v2.2.0).
-> **📥 Flashing:** AnyKernel3 zip — writes the `boot` partition of the active slot only. Rollback: `fastboot flash boot_a/b boot.img` with the ROM's stock boot image.
->
-> Ready-to-flash zip is in [Releases](../../releases). Verified booting on the target ROM (2026-10-05).
+# OnePlus 13 (dodge) — PixelOS kernel
+
+A **device-specific** fork. It targets **exactly one device and one ROM** — my own OnePlus 13 — and
+nothing else. Everything here is built from the ROM's **own kernel tree**, so the kernel release
+string matches the ROM byte-for-byte and its `vendor_dlkm` modules load.
+
+> Upstream [WildKernels/OnePlus_KernelSU_SUSFS](https://github.com/WildKernels/OnePlus_KernelSU_SUSFS)
+> targets **OnePlus stock (OnePlusOSS) trees**. This ROM's kernel comes from the **LineageOS/AOSP
+> tree**, so the pipeline had to be re-pointed at it. See [Why a fork](#why-a-fork).
 
 ---
 
-<div align="center">
+## 🎯 Target
 
-# 🔥 Wild Kernels for OnePlus (Oppo/Realme)
+| | |
+|---|---|
+| **Device** | OnePlus 13 — codename **`dodge`**, SoC `sun` / **SM8750** (Snapdragon 8 Elite) |
+| **ROM** | `PixelOS_dodge-17.0-20260912-0535` (**Android 17**) |
+| **Kernel** | **`6.6.142-4k-gc568e18c7f62`** — must match the ROM exactly |
+| **Source** | `LineageOS/android_kernel_oneplus_sm8750` @ `c568e18c7f62` + the ROM's own `.config` (extracted from its `boot.img`) |
+| **Toolchain** | ZyC **clang 22** (clang 19 silently produces an unbootable kernel here) |
+| **Vermagic** | `6.6.142-4k-gc568e18c7f62 SMP preempt mod_unload modversions aarch64` |
 
-[![KernelSU-Next](https://img.shields.io/badge/KernelSU_Next-Supported-green)](https://kernelsu-next.github.io/webpage/)
-[![KernelSU](https://img.shields.io/badge/KernelSU-Supported-green)](https://kernelsu.org/)
-[![Wild KSU](https://img.shields.io/badge/Wild_KSU-Not%20Supported-cb2431)](https://github.com/WildKernels/Wild_KSU/)
-[![SUSFS](https://img.shields.io/badge/SUSFS-Integrated-orange?logo=gitlab)](https://gitlab.com/simonpunk/susfs4ksu)
-[![OnePlusOSS Tracking Status](https://img.shields.io/badge/OnePlusOSS--Tracker-active-green)](https://github.com/WildKernels/OnePlus_KernelSU_SUSFS/blob/status-page/README.md)
+⚠️ This kernel is **only** for the combination above. Flashing it on any other ROM/kernel version
+will break module loading (the release string is part of the module ABI).
 
-</div>
+## ✅ Supported features
 
----
+| Feature | State |
+|---|---|
+| **KernelSU-Next** (versionCode `33239`) | ✅ |
+| Matching **Manager APK** (`33239`) shipped in Releases | ✅ |
+| **SUSFS** v2.2.0 (+ userspace module) | ✅ |
+| **BBG** — Baseband Guard (protects non-user partitions) | ✅ |
+| **Unicode bypass fix** (non-printable path traversal) | ✅ |
+| **IP_SET + IPv6 NAT**, **TTL target** | ✅ |
+| **zram**: built-in, **LZ4** default, ZSTD available, multi-comp streams | ✅ |
+| **CVE fixes**: 2026-89839 / 93209 / 90255 / 80830 / 80842 | ✅ |
+| Droidspaces + NTSync | ⏳ planned (full) |
+| Re:Kernel (tombstone support) | ⏳ planned (lite) |
+| ADIOS I/O scheduler | ⏳ planned (lite, 6.12→6.6 port) |
+| NetHunter + rtw88 / monitor-mode injection | ⏳ planned (full) |
+| KPM (KernelPatch Next) | ⏳ planned (full) |
+| LZ4KD zram algorithm (experimental) | ⏳ planned (full) |
+| HMBIRD (OnePlus fengchi SCX) | ❌ **not possible** — the scheduler source does not exist in this tree |
+
+## 📋 TODO
+
+- [x] Build from the ROM's own kernel tree so `uname -r` / vermagic match it exactly
+- [x] Track down the early-boot silent hang → root cause was the **compiler version**
+- [x] KernelSU-Next `33239` + an exact-versionCode Manager APK (no more *"kernel update required"*)
+- [x] SUSFS v2.2.0 + BBG
+- [x] `unicode`, `ip_set`, `ttl`
+- [x] zram built-in with LZ4 default + multi-comp *(pending on-device boot check of r2)*
+- [x] Five verified CVE fixes backported *(pending on-device boot check of r2)*
+- [ ] CVE-2026-93235 / CVE-2026-80762 — need manual porting (OnePlus' f2fs changes / context drift)
+- [ ] Re:Kernel — build `re-kernel.ko` against this kernel, ship as a Magisk module
+- [ ] ADIOS — port `block/elevator.c` from 6.12 to 6.6, add the scheduler
+- [ ] **lite** = everything above (KSU+SUSFS+BBG+unicode/ip_set/ttl+zram+Re:Kernel+ADIOS)
+- [ ] **full** = lite + Droidspaces/NTSync + NetHunter/rtw88 + KPM + LZ4KD
+- [ ] Split the build matrix into `OP13-lite` / `OP13-full` configs
+- [x] ~~Switch the root solution to BakaSU/SukiSU~~ — **dropped**: the SUSFS patches do not apply to BakaSU's tree (94 / 97 failed hunks), and SUSFS is not negotiable
+- [x] ~~HMBIRD~~ — **dropped**: no fengchi SCX source in this tree
+
+## 📥 Install
+
+1. Grab both assets from the [latest release](../../releases):
+   - the AnyKernel3 kernel zip
+   - the matching **KernelSU-Next Manager APK** (`…_33239-release.apk`)
+2. Back up your current boot image.
+3. Flash the kernel zip in OrangeFox recovery (or KernelFlasher). It writes **only the `boot`
+   partition** of the active slot; A/B is handled automatically.
+4. Install the Manager APK **of the same versionCode as the kernel** (newer = *"kernel update
+   required"*).
+5. For SUSFS hiding, install the userspace module `sidex15/ksu_module_susfs` (v2.2.0) through the Manager.
+
+**Rollback:** `fastboot flash boot_a boot.img` and `fastboot flash boot_b boot.img` with the ROM's
+stock boot image.
+
+## 🔧 Why a fork / how it works
+
+- **Source**: the ROM's kernel is `LineageOS/android_kernel_oneplus_sm8750` @ `c568e18c7f62`; upstream
+  builds only from OnePlusOSS trees whose versions stop at 6.6.118.
+- **Version string**: the action is patched so `LOCALVERSION` is pinned to `-4k-gc568e18c7f62`, LTO is
+  forced to `LTO_NONE` (as the ROM builds it) and `-mcpu=oryon-1` is removed.
+- **The boot hang**: every 6.6.142 rebuild built with ZyC **clang 19** hung silently at the first
+  logo — no error, correct vermagic, clean patches. Switching to **clang 22** fixed it. If you rebuild,
+  do not lower the compiler version.
+- **SUSFS** is vendored into the repo (`vendor_susfs4ksu/`) because GitLab archive downloads are
+  blocked from GitHub runners.
+- **Patches** live in `patches/` (e.g. the verified CVE backports in `patches/cve/`).
+- **AK3**: the `boot`-version check is disabled (`do.check_boot_version=0`) because it only recognises
+  `-androidNN` style version strings, which this ROM does not use.
+
+## 🙏 Credits
+
+[WildKernels](https://github.com/WildKernels) (pipeline), [KernelSU-Next](https://github.com/KernelSU-Next/KernelSU-Next),
+[tiann/KernelSU](https://github.com/tiann/KernelSU), [simonpunk/susfs4ksu](https://gitlab.com/simonpunk/susfs4ksu),
+[vc-teahouse/Baseband-guard](https://github.com/vc-teahouse/Baseband-guard), [sidex15](https://github.com/sidex15),
+[ZyCromerZ/Clang](https://github.com/ZyCromerZ/Clang), and the LineageOS/PixelOS maintainers.
 
 ## ⚠️ Disclaimer
 
-Flashing this kernel will not void your warranty, but there is always a risk of bricking your device. Please make sure to:
-- 💾 Back up your data
-- 🧠 Understand the risks before proceeding
-
-- I am **not responsible** for bricked devices, damaged hardware, or any issues that arise from using this kernel.
-
-- **Please** do thorough research and fully understand the features added in this kernel before flashing it!
-
-- By flashing this kernel, **YOU** are choosing to make these modifications. If something goes wrong, **do not blame me**!
-
-<div align="center">
-  
-# **🚨 Proceed at your own risk!**
-
-</div>
-
----
-
-## 🔧 Available Kernels
-
-<div align="center">
-
-| Kernel | Repository | Status |
-|--------|------------|--------|
-| 🏗️ **GKI** | [GKI_KernelSU_SUSFS](https://github.com/WildKernels/GKI_KernelSU_SUSFS) | ✅ Active |
-| 👑 **Sultan** | [Sultan_KernelSU_SUSFS](https://github.com/WildKernels/Sultan_KernelSU_SUSFS) | ✅ Active |
-| 📱 **OnePlus/Oppo/Realme** | [OnePlus_KernelSU_SUSFS](https://github.com/WildKernels/OnePlus_KernelSU_SUSFS) | ✅ Active |
-| 📱 **Samsung** | [Samsung_KernelSU_SUSFS](https://github.com/WildKernels/Samsung_KernelSU_SUSFS) | ✅ Active |
-</div>
-
----
-
-## 🔗 Additional Resources
-
-- 🩹 [Kernel Patches](https://github.com/WildKernels/kernel_patches)
-- ⚡ [Kernel Flasher](https://github.com/fatalcoder524/KernelFlasher)
-
----
-
-## 📱 Device Compatibility
-
-- Please verify the device compatibility before flashing here: [Compatibility_Info](https://github.com/WildKernels/OnePlus_KernelSU_SUSFS/blob/main/compatibility.md). 
-
----
-
-## 📱 OnePlusOSS Repositories Tracking
-
-- 📊 **Live Dashboard**: [OnePlus Repos Tracking & Changes](https://github.com/WildKernels/OnePlus_KernelSU_SUSFS/blob/status-page/README.md)
-- ⏱️ **Update Frequency**: Every 2 hours (Automated)
----
-
-## ✨ Features
-
-- 🔐 **KernelSU / KernelSU-Next**: A root solution for Android GKI devices that works in kernel mode and grants root permission to userspace applications directly in kernel space
-- 🔥 **WildKSU Manager Support**: Support for the Root Manager developed by our team with lots of customisations
-- 🥷 **SUSFS**: An addon root hiding kernel patches and userspace module for KernelSU
-- 🛡️ **BBG**: LSM-based Baseband Guard security to protect critical device partitions. abl/efisp can be added to whitelist for efisp exploit devices.
-- 🛠️ **HMBIRD SCX**: Scheduler extensions for SM8750/MT6991 devices
-- 🖧 **BBRv1**: Improved TCP congestion control
-- 🖧 **BBRv3**: Improved TCP congestion control
-- 🚦 **CAKE and PIE qdisc Support**: Better Net Schedulers
-- ✅ **LTO**: Link Time Optimisation enabled
-- 🚀 **Optimisation patches**: Memory, I/O, CPU scheduler, network and other general tunings
-- 🌐 **TTL Target Support**: Network packet manipulation
-- 🧱 **IP Set & IPv6 NAT Support**: Advanced firewall capabilities and IPv6 NAT Support
-- ⚡️ **TMPFS XATTR / POSIX ACL**: Extended TMPFS support for meta modules and Mountify
-- </> **Unicode Bypass Fix**: Prevent path traversal and other detections using non-printable Unicode codepoints [Experimental]
-- 🖥️ **Droidspaces Support**: Support Portable Linux containers to run full Linux environments.
-- 🔃 **NTSync**: Provide high-performance, low-latency synchronization primitives compatible with the Windows NT kernel API
-
----
-
-## 📋 Installation Instructions
-
-For GKI installation, please follow the official guide:
-
-📖 **[KernelSU Installation Guide](https://kernelsu.org/guide/installation.html)**
-
-You can also find Installation instructions in the release notes.
-
----
-
-## 🌟 Special Thanks
-
-**These amazing people help make this project possible! ❤️**
-
-<div align="center">
-
-
-| 🔧 **Project** | 👨‍💻 **Developer** | 🔗 **Link** |
-|:---------------:|:----------------:|:-----------:|
-| **KernelSU** | tiann | [![GitHub](https://img.shields.io/badge/GitHub-tiann-blue?style=flat-square&logo=github)](https://github.com/tiann/KernelSU) |
-| **KernelSU-Next** | rifsxd | [![GitHub](https://img.shields.io/badge/GitHub-rifsxd-blue?style=flat-square&logo=github)](https://github.com/KernelSU-Next/KernelSU-Next) |
-| **Magic-KSU** | 5ec1cff | [![GitHub](https://img.shields.io/badge/GitHub-5ec1cff-blue?style=flat-square&logo=github)](https://github.com/5ec1cff/KernelSU) |
-| **SUSFS** | simonpunk | [![GitLab](https://img.shields.io/badge/GitLab-simonpunk-orange?style=flat-square&logo=gitlab)](https://gitlab.com/simonpunk/susfs4ksu.git) |
-| **SUSFS Module** | sidex15 | [![GitHub](https://img.shields.io/badge/GitHub-sidex15-blue?style=flat-square&logo=github)](https://github.com/sidex15) |
-| **Sultan Kernels** | kerneltoast | [![GitHub](https://img.shields.io/badge/GitHub-kerneltoast-blue?style=flat-square&logo=github)](https://github.com/kerneltoast) |
-| **Baseband Guard** | vc-teahouse | [![GitHub](https://img.shields.io/badge/GitHub-vc--teahouse-blue?style=flat-square&logo=github)](https://github.com/vc-teahouse/Baseband-guard.git) |
-| **Droidspaces** | ravindu644 | [![GitHub](https://img.shields.io/badge/GitHub-ravindu644-blue?style=flat-square&logo=github)](https://github.com/ravindu644/Droidspaces-OSS.git) |
-
-</div>
-
-*If you have contributed and are not listed here, please remind me!* 🙏
-
----
-
-## 💬 Support
-
-If you encounter any issues or need help, feel free to:
-- 🐛 Open an issue in this repository
-- 💬 Reach out to me directly
-
----
-
-## 📱 Connect With Us
-
-<div align="center">
-  
-[![Telegram](https://img.shields.io/badge/Telegram-fatalcoder524-blue?logo=telegram)](https://t.me/anonymous_yolo)
-[![Telegram Group](https://img.shields.io/badge/Telegram-WildKernels-blue?logo=telegram)](https://t.me/WildKernelsTG)
-
-</div>
-
----
-
-## 💝 Donations
-
-Any and all donations are appreciated!
-
-PayPal: [paypal.me/fatalcoder524](https://paypal.me/fatalcoder524)
-
-DM on Telegram for UPI donations!
-
+Flashing this modifies your device. Back up first. Use at your own risk — no warranty, no blame.
