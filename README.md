@@ -1,4 +1,4 @@
-﻿# OnePlus 13 (dodge) — PixelOS 内核
+# OnePlus 13 (dodge) — PixelOS 内核
 
 **设备专属** fork，只针对**一台设备、一个 ROM**——我手上这台 OnePlus 13，其他一概不管。
 所有东西都从 ROM **自带的内核树**构建，所以内核 release string 与 ROM 逐字节一致，
