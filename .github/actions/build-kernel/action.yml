@@ -405,14 +405,14 @@ runs:
         # (module, default lzo-rle) from vendor_dlkm, which would shadow a module of ours,
         # so build it in instead. lz4/zstd/lzo libs are already =y in the ROM config.
         cat >> "$DEFCONFIG" <<'ZRAMCFG'
-CONFIG_ZSMALLOC=y
-CONFIG_ZRAM=y
-# CONFIG_ZRAM_DEF_COMP_LZORLE is not set
-# CONFIG_ZRAM_DEF_COMP_LZO is not set
-CONFIG_ZRAM_DEF_COMP_LZ4=y
-CONFIG_ZRAM_MULTI_COMP=y
-CONFIG_ZRAM_WRITEBACK=y
-ZRAMCFG
+        CONFIG_ZSMALLOC=y
+        CONFIG_ZRAM=y
+        # CONFIG_ZRAM_DEF_COMP_LZORLE is not set
+        # CONFIG_ZRAM_DEF_COMP_LZO is not set
+        CONFIG_ZRAM_DEF_COMP_LZ4=y
+        CONFIG_ZRAM_MULTI_COMP=y
+        CONFIG_ZRAM_WRITEBACK=y
+        ZRAMCFG
         echo "Replaced gki_defconfig with ROM config ($(wc -l < "$DEFCONFIG") lines)"
 
     - name: Set Kernel build-tools to Path
