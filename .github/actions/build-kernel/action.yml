@@ -1735,6 +1735,34 @@ runs:
         echo "ADIOS scheduler added (built-in, default)"
         echo "::endgroup::"
 
+    - name: Add Re:Kernel (in-tree, built into the image)
+      if: ${{ env.OP_REKERNEL == 'true' }}
+      shell: bash
+      run: |
+        set -euo pipefail
+        echo "::group::Add Re:Kernel"
+        DEST="$COMMON_KERNEL_FOLDER/drivers/android"
+        [ -f "$DEST/Makefile" ] || { echo "::error::$DEST/Makefile missing"; exit 1; }
+        for h in include/trace/hooks/binder.h include/trace/hooks/signal.h; do
+          [ -f "$COMMON_KERNEL_FOLDER/$h" ] || { echo "::error::$h missing"; exit 1; }
+        done
+        rm -rf "$GITHUB_WORKSPACE/rekernel-src"
+        git clone --depth=1 https://github.com/Sakion-Team/Re-Kernel.git "$GITHUB_WORKSPACE/rekernel-src"
+        SRC=$(find "$GITHUB_WORKSPACE/rekernel-src" -maxdepth 3 -type d -name 'LKM-Source' | head -1)
+        [ -n "$SRC" ] || { echo "::error::LKM-Source not found"; exit 1; }
+        cp "$SRC"/*.c "$SRC"/*.h "$DEST"/
+        printf '%s\n' \
+          '' \
+          '# Re:Kernel (built-in, added by the PixelOS dodge fork)' \
+          'obj-y += rekernel.o' \
+          'rekernel-y := rekernel_main.o rekernel_netlink.o rekernel_binder.o rekernel_signal.o rekernel_netfilter.o' \
+          >> "$DEST/Makefile"
+        echo "injected sources:"
+        ls -1 "$DEST"/rekernel_main.c "$DEST"/rekernel_binder.c "$DEST"/rekernel_internal.h | sed 's/^/  /'
+        echo "wiring:"
+        grep -n 'rekernel' "$DEST/Makefile" | sed 's/^/  /'
+        echo "::endgroup::"
+
     - name: Add Droidspaces support
       if: ${{ env.OP_PURE != 'true' && env.OP_DS == 'true' }}
       shell: bash
@@ -2491,112 +2519,6 @@ runs:
         compression-level: 9
         retention-days: 90
 
-    - name: Build Re:Kernel LKM (packaged as Magisk module)
-      if: ${{ env.OP_REKERNEL == 'true' }}
-      continue-on-error: true
-      shell: bash
-      run: |
-        echo "::group::Re:Kernel LKM"
-        OUT_DIR="$COMMON_KERNEL_FOLDER/out"
-        LKM_OUT="$GITHUB_WORKSPACE/lkm_artifacts"
-        mkdir -p "$LKM_OUT"
-        if [ ! -f "$OUT_DIR/include/config/auto.conf" ] || [ ! -f "$OUT_DIR/include/generated/autoconf.h" ]; then
-          echo "::warning::kernel build output looks unprepared ($OUT_DIR); no LKM artifact"
-          echo "::endgroup::"
-          exit 0
-        fi
-        rm -rf "$GITHUB_WORKSPACE/rekernel-src"
-        if ! git clone --depth=1 https://github.com/Sakion-Team/Re-Kernel.git "$GITHUB_WORKSPACE/rekernel-src"; then
-          echo "::warning::Re:Kernel clone failed; skipping LKM build"
-          echo "::endgroup::"
-          exit 0
-        fi
-        SRC=$(find "$GITHUB_WORKSPACE/rekernel-src" -maxdepth 3 -type d -name 'LKM-Source' | head -1)
-        if [ -z "$SRC" ]; then
-          echo "::warning::LKM-Source directory not found; skipping LKM build"
-          echo "::endgroup::"
-          exit 0
-        fi
-        DEST="$COMMON_KERNEL_FOLDER/drivers/android"
-        if [ ! -f "$DEST/binder_internal.h" ]; then
-          echo "::warning::$DEST/binder_internal.h missing; no LKM artifact"
-          echo "::endgroup::"
-          exit 0
-        fi
-        if [ ! -f "$OUT_DIR/Module.symvers" ] && [ -f "$OUT_DIR/vmlinux.symvers" ]; then
-          cp "$OUT_DIR/vmlinux.symvers" "$OUT_DIR/Module.symvers"
-          echo "seeded Module.symvers from vmlinux.symvers (modversions CRCs)"
-        fi
-        cp "$SRC"/*.c "$SRC"/*.h "$DEST"/
-        cat "$SRC/Makefile" >> "$DEST/Makefile"
-        echo "sources copied into $DEST"
-        export PATH="$CLANG_BIN_PATH:$PATH"
-        export ARCH=arm64 SUBARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu-
-        export LLVM=1 LLVM_IAS=1 AR=llvm-ar NM=llvm-nm OBJCOPY=llvm-objcopy OBJDUMP=llvm-objdump STRIP=llvm-strip
-        export KCFLAGS="${KCFLAGS:-} -no-canonical-prefixes -fdiagnostics-color=never -Qunused-arguments -Wno-unused-command-line-argument -D__ANDROID_COMMON_KERNEL__"
-        export KCPPFLAGS="${KCPPFLAGS:-}"
-        echo "---- build rekernel.ko ----"
-        if make -C "$COMMON_KERNEL_FOLDER" O="$OUT_DIR" M="$DEST" \
-             CONFIG_REKERNEL=m REKERNEL_VERSION="$KERNEL_FULL_VER" CC="clang" \
-             LD="$COMMON_KERNEL_FOLDER/ld-wrapper" HOSTLD="$COMMON_KERNEL_FOLDER/ld-wrapper" \
-             -j"$(nproc --all)" modules > /tmp/lkm_build.log 2>&1; then
-          echo "modules build: ok"
-        else
-          echo "::warning::rekernel.ko build failed; log below"
-        fi
-        tail -60 /tmp/lkm_build.log || true
-        grep -m 10 -E "error:|Error [0-9]|undefined!" /tmp/lkm_build.log || true
-        KO=$(find "$DEST" "$OUT_DIR/drivers/android" -maxdepth 1 -name 'rekernel.ko' 2>/dev/null | head -1)
-        if [ -z "$KO" ]; then
-          echo "::warning::rekernel.ko not produced; no LKM artifact"
-          echo "::endgroup::"
-          exit 0
-        fi
-        echo "---- module info ----"
-        llvm-strip -d "$KO" 2>/dev/null || echo "::warning::llvm-strip -d failed"
-        strings "$KO" | grep -m 3 -E "6\.6\.142|vermagic|rekernel" || true
-        PKG="$GITHUB_WORKSPACE/lkm_pkg"
-        rm -rf "$PKG"
-        mkdir -p "$PKG"
-        cp "$KO" "$PKG/rekernel.ko"
-        printf '%s\n' \
-          'id=rekernel' \
-          'name=Re:Kernel LKM' \
-          "version=$KERNEL_FULL_VER" \
-          'versionCode=1' \
-          'author=Sakion-Team (packaged by szh1118)' \
-          'description=Re:Kernel out-of-tree LKM built against the PixelOS dodge kernel; insmods rekernel.ko at post-fs-data.' \
-          > "$PKG/module.prop"
-        printf '%s\n' \
-          '#!/system/bin/sh' \
-          'MODDIR=${0%/*}' \
-          'for i in 1 2 3 4 5; do' \
-          '  if insmod "$MODDIR/rekernel.ko" 2>/dev/null; then' \
-          '    log -t rekernel "rekernel.ko loaded"; exit 0' \
-          '  fi' \
-          '  sleep 1' \
-          'done' \
-          'log -t rekernel "rekernel.ko insmod failed"' \
-          'exit 0' \
-          > "$PKG/post-fs-data.sh"
-        chmod 755 "$PKG/post-fs-data.sh"
-        LKM_ZIP="rekernel_${KERNEL_FULL_VER}_$(date +%Y%m%d).zip"
-        ( cd "$PKG" && zip -r9 "$LKM_OUT/$LKM_ZIP" ./* > /dev/null ) || echo "::warning::zip failed"
-        printf 'lkm_zip_name=%s\n' "$LKM_ZIP" >> "$GITHUB_OUTPUT"
-        echo "LKM_ZIP_NAME=$LKM_ZIP" >> "$GITHUB_ENV"
-        echo "built $(basename "$KO") ($(stat -c%s "$KO") bytes) -> $LKM_ZIP"
-        echo "::endgroup::"
-      id: lkm_step
-
-    - name: Upload Re:Kernel LKM
-      if: success() && steps.lkm_step.outputs.lkm_zip_name != ''
-      uses: actions/upload-artifact@v7
-      with:
-        archive: false
-        compression-level: 0
-        name: ${{ steps.lkm_step.outputs.lkm_zip_name }}
-        path: ${{ github.workspace }}/lkm_artifacts/${{ steps.lkm_step.outputs.lkm_zip_name }}
-        retention-days: 90
     - name: Upload Artifacts
       if: success() && steps.create_zip.conclusion == 'success'
       uses: actions/upload-artifact@v7
