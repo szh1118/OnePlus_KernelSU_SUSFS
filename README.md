@@ -34,11 +34,12 @@ will break module loading (the release string is part of the module ABI).
 | **BBG** — Baseband Guard (protects non-user partitions) | ✅ |
 | **Unicode bypass fix** (non-printable path traversal) | ✅ |
 | **IP_SET + IPv6 NAT**, **TTL target** | ✅ |
-| **zram**: built-in, **LZ4** default, ZSTD available, multi-comp streams | ✅ |
-| **CVE fixes**: 2026-89839 / 93209 / 90255 / 80830 / 80842 | ✅ |
+| **zram**: built-in, **LZ4** default, ZSTD available, multi-comp streams | ✅ verified on device (`[lz4]`, 6 GB swap) |
+| **CVE-2026-89839 / 80830 / 80842** (f2fs / USB hub / bridge) | ✅ patched **and compiled in** (`=y` subsystems) |
+| **CVE-2026-90255 / 93209 / 80762** (kernel BT core) | ➖ **N/A on this device** — see [Bluetooth](#-bluetooth-on-this-rom) |
 | Droidspaces + NTSync | ⏳ planned (full) |
-| Re:Kernel (tombstone support) | ⏳ planned (lite) |
-| ADIOS I/O scheduler | ⏳ planned (lite, 6.12→6.6 port) |
+| Re:Kernel (tombstone support) | 🔧 wired (`rekernel.ko` → Magisk module artifact) |
+| ADIOS I/O scheduler | 🔧 wired (6.12→6.6 port, built-in, set as default) |
 | NetHunter + rtw88 / monitor-mode injection | ⏳ planned (full) |
 | KPM (KernelPatch Next) | ⏳ planned (full) |
 | LZ4KD zram algorithm (experimental) | ⏳ planned (full) |
@@ -51,16 +52,50 @@ will break module loading (the release string is part of the module ABI).
 - [x] KernelSU-Next `33239` + an exact-versionCode Manager APK (no more *"kernel update required"*)
 - [x] SUSFS v2.2.0 + BBG
 - [x] `unicode`, `ip_set`, `ttl`
-- [x] zram built-in with LZ4 default + multi-comp *(pending on-device boot check of r2)*
-- [x] Five verified CVE fixes backported *(pending on-device boot check of r2)*
-- [ ] CVE-2026-93235 / CVE-2026-80762 — need manual porting (OnePlus' f2fs changes / context drift)
-- [ ] Re:Kernel — build `re-kernel.ko` against this kernel, ship as a Magisk module
-- [ ] ADIOS — port `block/elevator.c` from 6.12 to 6.6, add the scheduler
-- [ ] **lite** = everything above (KSU+SUSFS+BBG+unicode/ip_set/ttl+zram+Re:Kernel+ADIOS)
+- [x] zram built-in with LZ4 default + multi-comp — **verified on device**
+- [x] CVE backports `89839 / 80830 / 80842` — **patched *and* compiled into the image** (`=y` subsystems)
+- [x] CVE `90255 / 93209 / 80762` — **not applicable here**: they live in the *kernel* BT core, which this ROM never uses (see below)
+- [ ] CVE-2026-93235 (f2fs post-EOF zeroing) — our 6.6.142 snapshot lacks the prerequisite `f2fs_zero_post_eof_page()` series entirely (fixed upstream in 6.6.157), so this is not a one-patch backport; **deliberately not applied**
+- [x] Re:Kernel — built as an out-of-tree LKM and shipped as a **separate Magisk module** artifact (never touches the kernel image)
+- [x] ADIOS — `patches/adios/adios-6.6.patch` (6.12→6.6, only the `elevator_find_get()` signature differs), built-in and set as default
+- [ ] **lite** = KSU + SUSFS + BBG + unicode/ip_set/ttl + zram + Re:Kernel + ADIOS — *pending: flash + verify the ADIOS/LKM build*
 - [ ] **full** = lite + Droidspaces/NTSync + NetHunter/rtw88 + KPM + LZ4KD
 - [ ] Split the build matrix into `OP13-lite` / `OP13-full` configs
 - [x] ~~Switch the root solution to BakaSU/SukiSU~~ — **dropped**: the SUSFS patches do not apply to BakaSU's tree (94 / 97 failed hunks), and SUSFS is not negotiable
 - [x] ~~HMBIRD~~ — **dropped**: no fengchi SCX source in this tree
+
+## 📶 Bluetooth on this ROM
+
+Bluetooth **works**, but not through the kernel: the QTI HAL
+(`android.hardware.bluetooth@aidl-service-qti`) owns `/dev/ttyHS0` and speaks **H4 in userspace**
+(the Fluoride/GD stack implements L2CAP/RFCOMM inside `com.android.bluetooth`). The GKI BT core
+modules from `system_dlkm` (`bluetooth.ko`, `hci_uart.ko`, …) are therefore **unused reference
+modules** here — on this kernel they even fail to load, and that is harmless:
+
+```
+bluetooth: disagrees about version of symbol sk_filter_trim_cap (err -22)
+```
+
+That CRC divergence comes from `CONFIG_BPF_STREAM_PARSER`, which upstream's *ip_set* step switches on
+even though the ROM ships it off (`sk_filter_trim_cap`'s prototype takes a `struct sock *`, so the
+modversions CRC covers that type's closure). The build now keeps it off for `wild/sm8750`, and every
+build prints a `CONFIG PARITY vs ROM baseline` diff so silent config drift shows up in the log.
+
+**Consequence:** CVE-2026-90255 / 93209 / 80762 target `net/bluetooth/*.c`, i.e. a code path this
+device does not execute — building the BT core into the image just to "fix" them would add code that
+never runs. They are documented as N/A rather than patched.
+
+## 🔍 Verifying a build on the device
+
+`/proc/config.gz` is world-readable, so the fastest audit is:
+
+```sh
+adb pull /proc/config.gz && zcat config.gz | grep -E 'ZRAM_DEF_COMP|KSU|BBG|LTO_NONE'
+adb shell 'cat /sys/kernel/security/lsm'          # needs a root shell: expect baseband_guard
+adb shell 'cat /proc/swaps; cat /sys/block/zram0/comp_algorithm'   # expect [lz4]
+adb shell 'uname -r'                              # expect 6.6.142-4k-gc568e18c7f62
+```
+
 
 ## 📥 Install
 

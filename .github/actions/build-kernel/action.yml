@@ -1720,6 +1720,21 @@ runs:
         CONFIG_IP6_NF_TARGET_MASQUERADE=y
         EOF
 
+    - name: Add ADIOS I/O Scheduler
+      if: ${{ env.OP_ADIOS == 'true' }}
+      shell: bash
+      run: |
+        set -euo pipefail
+        echo "::group::Add ADIOS scheduler"
+        cd "$COMMON_KERNEL_FOLDER"
+        patch -p1 -t --forward < "$GITHUB_WORKSPACE/patches/adios/adios-6.6.patch"
+        printf '%s\n' \
+          'CONFIG_MQ_IOSCHED_ADIOS=y' \
+          'CONFIG_MQ_IOSCHED_DEFAULT_ADIOS=y' \
+          >> arch/arm64/configs/gki_defconfig
+        echo "ADIOS scheduler added (built-in, default)"
+        echo "::endgroup::"
+
     - name: Add Droidspaces support
       if: ${{ env.OP_PURE != 'true' && env.OP_DS == 'true' }}
       shell: bash
@@ -2476,6 +2491,93 @@ runs:
         compression-level: 9
         retention-days: 90
 
+    - name: Build Re:Kernel LKM (out-of-tree, packaged as Magisk module)
+      if: ${{ env.OP_REKERNEL == 'true' }}
+      continue-on-error: true
+      shell: bash
+      run: |
+        set -uo pipefail
+        echo "::group::Re:Kernel LKM"
+        OUT_DIR="$COMMON_KERNEL_FOLDER/out"
+        LKM_OUT="$GITHUB_WORKSPACE/lkm_artifacts"
+        mkdir -p "$LKM_OUT"
+        rm -rf "$GITHUB_WORKSPACE/rekernel-src"
+        if ! git clone --depth=1 https://github.com/Sakion-Team/Re-Kernel.git "$GITHUB_WORKSPACE/rekernel-src"; then
+          echo "::warning::Re:Kernel clone failed; skipping LKM build"
+          echo "::endgroup::"
+          exit 0
+        fi
+        SRC=$(find "$GITHUB_WORKSPACE/rekernel-src" -maxdepth 3 -type d -name 'LKM-Source' | head -1)
+        if [ -z "$SRC" ]; then
+          echo "::warning::LKM-Source directory not found; skipping LKM build"
+          echo "::endgroup::"
+          exit 0
+        fi
+        echo "LKM source: $SRC"
+        ls -la "$SRC" | head -20
+        if [ ! -f "$OUT_DIR/Module.symvers" ] && [ -f "$OUT_DIR/vmlinux.symvers" ]; then
+          cp "$OUT_DIR/vmlinux.symvers" "$OUT_DIR/Module.symvers"
+          echo "seeded Module.symvers from vmlinux.symvers (modversions CRCs)"
+        fi
+        make -C "$COMMON_KERNEL_FOLDER" O="$OUT_DIR" modules_prepare > /tmp/lkm_prepare.log 2>&1 || \
+          echo "::warning::modules_prepare returned non-zero (see log tail below)"
+        tail -5 /tmp/lkm_prepare.log || true
+        make -C "$COMMON_KERNEL_FOLDER" O="$OUT_DIR" M="$SRC" -j"$(nproc --all)" modules > /tmp/lkm_build.log 2>&1
+        rc=$?
+        tail -40 /tmp/lkm_build.log || true
+        if [ $rc -ne 0 ]; then
+          echo "::warning::rekernel.ko build failed (rc=$rc); no LKM artifact"
+          echo "::endgroup::"
+          exit 0
+        fi
+        KO=$(find "$SRC" -name 'rekernel.ko' | head -1)
+        if [ -z "$KO" ]; then
+          echo "::warning::rekernel.ko not produced"
+          echo "::endgroup::"
+          exit 0
+        fi
+        PKG="$GITHUB_WORKSPACE/lkm_pkg"
+        rm -rf "$PKG"
+        mkdir -p "$PKG"
+        cp "$KO" "$PKG/rekernel.ko"
+        printf '%s\n' \
+          'id=rekernel' \
+          'name=Re:Kernel LKM' \
+          "version=$KERNEL_FULL_VER" \
+          'versionCode=1' \
+          'author=Sakion-Team (packaged by szh1118)' \
+          'description=Re:Kernel out-of-tree LKM built against the PixelOS dodge kernel; insmods rekernel.ko at post-fs-data.' \
+          > "$PKG/module.prop"
+        printf '%s\n' \
+          '#!/system/bin/sh' \
+          'MODDIR=${0%/*}' \
+          'for i in 1 2 3 4 5; do' \
+          '  if insmod "$MODDIR/rekernel.ko" 2>/dev/null; then' \
+          '    log -t rekernel "rekernel.ko loaded"; exit 0' \
+          '  fi' \
+          '  sleep 1' \
+          'done' \
+          'log -t rekernel "rekernel.ko insmod failed"' \
+          'exit 0' \
+          > "$PKG/post-fs-data.sh"
+        chmod 755 "$PKG/post-fs-data.sh"
+        LKM_ZIP="rekernel_${KERNEL_FULL_VER}_$(date +%Y%m%d).zip"
+        ( cd "$PKG" && zip -r9 "$LKM_OUT/$LKM_ZIP" ./* > /dev/null )
+        printf 'lkm_zip_name=%s\n' "$LKM_ZIP" >> "$GITHUB_OUTPUT"
+        echo "LKM_ZIP_NAME=$LKM_ZIP" >> "$GITHUB_ENV"
+        echo "built $(basename "$KO") ($(stat -c%s "$KO") bytes) -> $LKM_ZIP"
+        echo "::endgroup::"
+      id: lkm_step
+
+    - name: Upload Re:Kernel LKM
+      if: success() && steps.lkm_step.outputs.lkm_zip_name != ''
+      uses: actions/upload-artifact@v7
+      with:
+        archive: false
+        compression-level: 0
+        name: ${{ steps.lkm_step.outputs.lkm_zip_name }}
+        path: ${{ github.workspace }}/lkm_artifacts/${{ steps.lkm_step.outputs.lkm_zip_name }}
+        retention-days: 90
     - name: Upload Artifacts
       if: success() && steps.create_zip.conclusion == 'success'
       uses: actions/upload-artifact@v7
