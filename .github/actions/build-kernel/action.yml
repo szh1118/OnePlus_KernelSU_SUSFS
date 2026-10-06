@@ -1325,9 +1325,8 @@ runs:
         echo "::endgroup::"
 
     - name: Apply KSU Hooks
-      if: ${{ env.OP_PURE != 'true' }}
+      if: ${{ env.OP_PURE != 'true' && env.NEED_HOOKS == 'true' }}
       shell: bash
-      if: ${{ env.NEED_HOOKS == 'true' }}
       run: |
         set -euo pipefail
         echo "::group::Apply KSU hooks"
@@ -1542,9 +1541,8 @@ runs:
         echo "::endgroup::"
 
     - name: Apply NTSync Patch
-      if: ${{ env.OP_PURE != 'true' }}
+      if: ${{ env.OP_PURE != 'true' && env.OP_NTSYNC == 'true' }}
       shell: bash
-      if: ${{ env.OP_NTSYNC == 'true' }}
       run: |
         set -euo pipefail
         echo "::group::Apply NTSync patch"
@@ -1595,9 +1593,8 @@ runs:
         echo "::endgroup::"
 
     - name: Apply Unicode Fix Patch
-      if: ${{ env.OP_PURE != 'true' }}
+      if: ${{ env.OP_PURE != 'true' && env.OP_UNICODE == 'true' }}
       shell: bash
-      if: ${{ env.OP_UNICODE == 'true' }}
       run: |
         set -euo pipefail
         echo "::group::Apply Unicode Fix patch"
@@ -1724,9 +1721,8 @@ runs:
         EOF
 
     - name: Add Droidspaces support
-      if: ${{ env.OP_PURE != 'true' }}
+      if: ${{ env.OP_PURE != 'true' && env.OP_DS == 'true' }}
       shell: bash
-      if: ${{ env.OP_DS == 'true' }}
       run: |
         echo "::group::Add Droidspaces Support"
         set -euo pipefail
@@ -1795,9 +1791,8 @@ runs:
         EOF
 
     - name: Add RUST build configs
-      if: ${{ env.OP_PURE != 'true' }}
+      if: ${{ env.OP_PURE != 'true' && env.OP_RUST_BUILD == 'true' }}
       shell: bash
-      if: ${{ env.OP_RUST_BUILD == 'true' }}
       run: |
         set -euo pipefail
         echo "Add Build based configs"
@@ -1832,9 +1827,8 @@ runs:
         echo "CUSTOM_LOCALVERSION=$CUSTOM_LOCALVERSION" >> "$GITHUB_ENV"
 
     - name: Disable GPUEB
-      if: ${{ env.OP_PURE != 'true' }}
+      if: ${{ env.OP_PURE != 'true' && env.KERNEL_VER == '5.10' && (startsWith(env.OP_SOC, 'dimensity') || startsWith(env.OP_SOC, 'helio')) }}
       shell: bash
-      if: ${{ env.KERNEL_VER == '5.10' && (startsWith(env.OP_SOC, 'dimensity') || startsWith(env.OP_SOC, 'helio')) }}
       run: |
         set -euo pipefail
         echo "Disabling GPUEB for MTK kernel 5.10"
