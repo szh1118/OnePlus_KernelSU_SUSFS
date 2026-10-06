@@ -1689,7 +1689,7 @@ runs:
         cd "$COMMON_KERNEL_FOLDER"
         KERNEL_VERSION="${{ env.KERNEL_VER }}"
         
-        if [[ "$KERNEL_VERSION" == "6.12" ]] || [[ "$OP_BRANCH" == wild/mt* ]]; then
+        if [[ "$KERNEL_VERSION" == "6.12" ]] || [[ "$OP_BRANCH" == wild/mt* ]] || [[ "$OP_BRANCH" == wild/sm8750 ]]; then
           echo "::debug::Skipping CONFIG_BPF_STREAM_PARSER for $KERNEL_VERSION / $OP_BRANCH"
         else
           echo "CONFIG_BPF_STREAM_PARSER=y" >> "$COMMON_KERNEL_FOLDER/arch/arm64/configs/gki_defconfig"
@@ -2046,6 +2046,18 @@ runs:
         echo "===== EFFECTIVE CONFIG ====="
         grep -E "^CONFIG_(LTO_NONE|LTO_CLANG|CFI_CLANG|LSM|KSU|KSU_SUSFS|BBG|MODVERSIONS|PSTORE_RAM|SECURITY_SELINUX)=" "$OUT/.config" || true
         echo "============================"
+        echo "===== CONFIG PARITY vs ROM baseline ====="
+        ROM_CFG="$GITHUB_WORKSPACE/configs/pixelos_dodge_6.6.142.config"
+        if [ -f "$ROM_CFG" ]; then
+          diff <(grep -hE '^CONFIG_[A-Za-z0-9_]+=' "$ROM_CFG" | sort) \
+               <(grep -hE '^CONFIG_[A-Za-z0-9_]+=' "$OUT/.config" | sort) \
+            | grep -E '^[<>]' | sed -e 's/^< /ROM-only: /' -e 's/^> /OURS:     /' \
+            || echo "  (no deltas)"
+          echo "-- delta lines: $(diff <(grep -hE '^CONFIG_[A-Za-z0-9_]+=' "$ROM_CFG" | sort) <(grep -hE '^CONFIG_[A-Za-z0-9_]+=' "$OUT/.config" | sort) | grep -cE '^[<>]' || true)"
+        else
+          echo "::warning::ROM baseline config missing, cannot compare"
+        fi
+        echo "=========================================="
         
         KCFLAGS="$KCFLAGS -Wno-error -pipe ${KCFLAGS_EXTRA}"
         KCPPFLAGS="$KCPPFLAGS -DCONFIG_OPTIMIZE_INLINING"
