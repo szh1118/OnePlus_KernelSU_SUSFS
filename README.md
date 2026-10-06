@@ -197,7 +197,7 @@ stock boot image.
 
 ### P0 — 高收益、低风险
 
-- [ ] **opt 优化补丁逐个测试**：当前 "opt": false，全部跳过。WildKernels 上游补丁针对 OnePlusOSS 树，本树是 LineageOS/AOSP 树，全开会卡 logo。应逐个启用测试，安全的留下，卡 logo 的丢弃。优先测试低风险补丁：reduce_gc_thread_sleep_time、silence_irq_cpu_logspam、increase_sk_mem_packets、reduce_freeze_timeout。
+- [ ] **opt 优化补丁逐个测试**：当前 `"opt": false`，全部跳过。WildKernels 上游补丁针对 OnePlusOSS 树，本树是 LineageOS/AOSP 树，全开会卡 logo。应逐个启用测试，安全的留下，卡 logo 的丢弃。优先测试低风险补丁：reduce_gc_thread_sleep_time、silence_irq_cpu_logspam、increase_sk_mem_packets、reduce_freeze_timeout。
 - [ ] **Droidspaces + NTSync 合入 lite**：当前只在 `OP13-full` 里。如果日常使用需要，考虑移到 `OP13-lite`。
 - [ ] **zram 压缩算法测试 ZSTD**：当前 LZ4 最快但压缩率最低。ZSTD 压缩率高 30-40%，swap 空间更大。对手机 RAM 扩展场景，压缩率可能比速度更重要。
 
@@ -209,10 +209,10 @@ stock boot image.
 
 ### P2 — 低优先级 / 高工作量
 
-- [ ] **ThinLTO**：ld-wrapper 已写好 --thinlto-jobs，但会改变符号表影响 vendor 模块 CRC。收益 1-3%，风险高，不建议。
+- [ ] **ThinLTO**：`ld-wrapper` 已写好 `--thinlto-jobs`，但会改变符号表影响 vendor 模块 CRC。收益 1-3%，风险高，不建议。
 - [ ] **SCX 调度器移植**：内核 6.10+ 才有 SCX 框架，backport 到 6.6 工作量巨大，性价比低。
 - [ ] **HMBIRD (fengchi)**：OnePlus 闭源 OEM 调度器，源码不在公开树里，无法使用。
-- [ ] **编译器额外标志**（-falign-jump=32、-falign-functions=32 等）：内核非计算密集型，收益极小，不建议折腾。
+- [ ] **编译器额外标志**（`-falign-jump=32`、`-falign-functions=32` 等）：内核非计算密集型，收益极小，不建议折腾。
 
 ### 已确认不需要 / 不做
 
