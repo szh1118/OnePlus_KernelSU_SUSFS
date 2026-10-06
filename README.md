@@ -42,7 +42,7 @@ will break module loading (the release string is part of the module ABI).
 | **Re:Kernel** v11.7 (tombstone / freeze support) | ✅ **built into the image** — `Re-Kernel hooked!` in dmesg |
 | **ADIOS** I/O scheduler | ✅ **built in and set as the default** (`[adios]` on every block device) |
 | NetHunter + rtw88 / monitor-mode injection | ⏳ planned (full) |
-| KPM (KernelPatch Next) | ⏳ planned (full) |
+| KPM (KernelPatch Next) | ❌ **dropped** — it is a competing root solution, not an add-on to KernelSU-Next |
 | LZ4KD zram algorithm (experimental) | ⏳ planned (full) |
 | HMBIRD (OnePlus fengchi SCX) | ❌ **not possible** — the scheduler source does not exist in this tree |
 
@@ -53,8 +53,8 @@ The build matrix is generated from **every** `configs/**/*.json`, so one dispatc
 
 | Config | Contents |
 |---|---|
-| [`configs/a16/OP13-lite.json`](configs/a16/OP13-lite.json) | Everything marked ✅ above. **This is the daily-driver build** and what Releases ship. |
-| [`configs/a16/OP13-full.json`](configs/a16/OP13-full.json) | lite **+ Droidspaces (`ds`) + NTSync (`ntsync`)**, and later NetHunter/rtw88, KPM, LZ4KD — one group added per round. |
+| [`configs/a16/OP13-lite.json`](configs/a16/OP13-lite.json) | Everything marked ✅ above, minus Droidspaces/NTSync. Ships as the **Latest** release (`lite-r13`) — the conservative choice. |
+| [`configs/a16/OP13-full.json`](configs/a16/OP13-full.json) | lite **+ Droidspaces (`ds`) + NTSync (`ntsync`)** — shipped as a **pre-release** (`full-r1`); later rounds may add NetHunter/rtw88 and LZ4KD, one group at a time. |
 
 ⚠️ `full` is **not** automatically safe to flash: Droidspaces flips five options the stock ROM leaves
 off (`CONFIG_SYSVIPC`, `CONFIG_POSIX_MQUEUE`, `CONFIG_USER_NS`, `CONFIG_PID_NS`, `CONFIG_DEVTMPFS`), and
@@ -101,7 +101,7 @@ chain, `Re-Kernel hooked!`, zram0 6 GB `[lz4]`.
 - [x] **full** round 1 — Droidspaces + NTSync: built as `OP13-full`, flashed, **device-verified** (see [Two variants](#-two-variants--op13-lite-and-op13-full))
 - [ ] **full** round 2 — NetHunter + rtw88 / monitor-mode injection (riskiest group, own round)
 - [ ] **full** round 3 — LZ4KD zram algorithm (experimental)
-- [ ] KPM (KernelPatch Next) — **needs a decision**: it is a second root solution, not just another patch
+- [ ] ~~KPM (KernelPatch Next)~~ — **dropped by decision (2026-10-07)**: KernelPatch is a second root solution; running it next to KernelSU-Next is a conflict, not a feature.
 - [x] Split the build matrix into `OP13-lite` / `OP13-full` configs (see [Two variants](#-two-variants--op13-lite-and-op13-full))
 - [x] ~~Switch the root solution to BakaSU/SukiSU~~ — **dropped**: the SUSFS patches do not apply to BakaSU's tree (94 / 97 failed hunks), and SUSFS is not negotiable
 - [x] ~~HMBIRD~~ — **dropped**: no fengchi SCX source in this tree
@@ -166,12 +166,27 @@ adb shell 'dmesg | grep -iE "Re-Kernel"'          # expect: Re:Kernel v11.7 … 
 1. Grab both assets from the [latest release](../../releases):
    - the AnyKernel3 kernel zip
    - the matching **KernelSU-Next Manager APK** (`…_33239-release.apk`)
+
+   Pick a variant: **`lite-r13`** is the Latest (recommended); **`full-r1`** is a pre-release that adds
+   Droidspaces + NTSync and also ships a ready-made `new_boot_full.img` for the fastboot route in step 5.
 2. Back up your current boot image.
-3. Flash the kernel zip in OrangeFox recovery (or KernelFlasher). It writes **only the `boot`
+3. **Verify the checksum on the device before flashing.** A recovery screen saying "Success" is not proof
+   that anything was written — check `sha256sum /dev/block/by-name/boot_a` against what you expect, and
+   compare `/proc/version`'s build timestamp with the one stated in the release notes.
+4. Flash the kernel zip in OrangeFox recovery (or KernelFlasher). It writes **only the `boot`
    partition** of the active slot; A/B is handled automatically.
-4. Install the Manager APK **of the same versionCode as the kernel** (newer = *"kernel update
+5. If the recovery route misbehaves, use the prebuilt image instead (recovery lives in its own partition on
+   this device, so a bad `boot` is always recoverable):
+
+   ```
+   adb reboot bootloader
+   fastboot getvar current-slot
+   fastboot flash boot_a <the release's boot image>
+   ```
+
+6. Install the Manager APK **of the same versionCode as the kernel** (newer = *"kernel update
    required"*).
-5. For SUSFS hiding, install the userspace module `sidex15/ksu_module_susfs` (v2.2.0) through the Manager.
+7. For SUSFS hiding, install the userspace module `sidex15/ksu_module_susfs` (v2.2.0) through the Manager.
 
 **Rollback:** `fastboot flash boot_a boot.img` and `fastboot flash boot_b boot.img` with the ROM's
 stock boot image.
