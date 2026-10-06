@@ -2496,7 +2496,6 @@ runs:
       continue-on-error: true
       shell: bash
       run: |
-        set -uo pipefail
         echo "::group::Re:Kernel LKM"
         OUT_DIR="$COMMON_KERNEL_FOLDER/out"
         LKM_OUT="$GITHUB_WORKSPACE/lkm_artifacts"
@@ -2514,25 +2513,33 @@ runs:
           exit 0
         fi
         echo "LKM source: $SRC"
-        ls -la "$SRC" | head -20
+        BINDER_INC="$COMMON_KERNEL_FOLDER/drivers/android"
+        if [ ! -f "$BINDER_INC/binder_internal.h" ]; then
+          echo "::warning::$BINDER_INC/binder_internal.h missing"
+        fi
         if [ ! -f "$OUT_DIR/Module.symvers" ] && [ -f "$OUT_DIR/vmlinux.symvers" ]; then
           cp "$OUT_DIR/vmlinux.symvers" "$OUT_DIR/Module.symvers"
           echo "seeded Module.symvers from vmlinux.symvers (modversions CRCs)"
         fi
-        make -C "$COMMON_KERNEL_FOLDER" O="$OUT_DIR" modules_prepare > /tmp/lkm_prepare.log 2>&1 || \
-          echo "::warning::modules_prepare returned non-zero (see log tail below)"
-        tail -5 /tmp/lkm_prepare.log || true
-        make -C "$COMMON_KERNEL_FOLDER" O="$OUT_DIR" M="$SRC" -j"$(nproc --all)" modules > /tmp/lkm_build.log 2>&1
-        rc=$?
-        tail -40 /tmp/lkm_build.log || true
-        if [ $rc -ne 0 ]; then
-          echo "::warning::rekernel.ko build failed (rc=$rc); no LKM artifact"
-          echo "::endgroup::"
-          exit 0
+        echo "---- modules_prepare ----"
+        if make -C "$COMMON_KERNEL_FOLDER" O="$OUT_DIR" modules_prepare > /tmp/lkm_prepare.log 2>&1; then
+          echo "modules_prepare: ok"
+        else
+          echo "::warning::modules_prepare returned non-zero"
         fi
+        tail -5 /tmp/lkm_prepare.log || true
+        echo "---- build rekernel.ko ----"
+        if make -C "$COMMON_KERNEL_FOLDER" O="$OUT_DIR" M="$SRC" \
+             KCFLAGS="-I$BINDER_INC" -j"$(nproc --all)" modules > /tmp/lkm_build.log 2>&1; then
+          echo "modules build: ok"
+        else
+          echo "::warning::rekernel.ko build failed; log below"
+        fi
+        tail -60 /tmp/lkm_build.log || true
+        grep -m 10 -E "error:|Error [0-9]|fatal error" /tmp/lkm_build.log || true
         KO=$(find "$SRC" -name 'rekernel.ko' | head -1)
         if [ -z "$KO" ]; then
-          echo "::warning::rekernel.ko not produced"
+          echo "::warning::rekernel.ko not produced; no LKM artifact"
           echo "::endgroup::"
           exit 0
         fi
@@ -2562,7 +2569,7 @@ runs:
           > "$PKG/post-fs-data.sh"
         chmod 755 "$PKG/post-fs-data.sh"
         LKM_ZIP="rekernel_${KERNEL_FULL_VER}_$(date +%Y%m%d).zip"
-        ( cd "$PKG" && zip -r9 "$LKM_OUT/$LKM_ZIP" ./* > /dev/null )
+        ( cd "$PKG" && zip -r9 "$LKM_OUT/$LKM_ZIP" ./* > /dev/null ) || echo "::warning::zip failed"
         printf 'lkm_zip_name=%s\n' "$LKM_ZIP" >> "$GITHUB_OUTPUT"
         echo "LKM_ZIP_NAME=$LKM_ZIP" >> "$GITHUB_ENV"
         echo "built $(basename "$KO") ($(stat -c%s "$KO") bytes) -> $LKM_ZIP"
