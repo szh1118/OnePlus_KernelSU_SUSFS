@@ -2491,7 +2491,7 @@ runs:
         compression-level: 9
         retention-days: 90
 
-    - name: Build Re:Kernel LKM (out-of-tree, packaged as Magisk module)
+    - name: Build Re:Kernel LKM (packaged as Magisk module)
       if: ${{ env.OP_REKERNEL == 'true' }}
       continue-on-error: true
       shell: bash
@@ -2500,6 +2500,11 @@ runs:
         OUT_DIR="$COMMON_KERNEL_FOLDER/out"
         LKM_OUT="$GITHUB_WORKSPACE/lkm_artifacts"
         mkdir -p "$LKM_OUT"
+        if [ ! -f "$OUT_DIR/include/config/auto.conf" ] || [ ! -f "$OUT_DIR/include/generated/autoconf.h" ]; then
+          echo "::warning::kernel build output looks unprepared ($OUT_DIR); no LKM artifact"
+          echo "::endgroup::"
+          exit 0
+        fi
         rm -rf "$GITHUB_WORKSPACE/rekernel-src"
         if ! git clone --depth=1 https://github.com/Sakion-Team/Re-Kernel.git "$GITHUB_WORKSPACE/rekernel-src"; then
           echo "::warning::Re:Kernel clone failed; skipping LKM build"
@@ -2512,9 +2517,9 @@ runs:
           echo "::endgroup::"
           exit 0
         fi
-        echo "LKM source: $SRC"
-        if [ ! -f "$OUT_DIR/include/config/auto.conf" ] || [ ! -f "$OUT_DIR/include/generated/autoconf.h" ]; then
-          echo "::warning::kernel build output looks unprepared ($OUT_DIR); no LKM artifact"
+        DEST="$COMMON_KERNEL_FOLDER/drivers/android"
+        if [ ! -f "$DEST/binder_internal.h" ]; then
+          echo "::warning::$DEST/binder_internal.h missing; no LKM artifact"
           echo "::endgroup::"
           exit 0
         fi
@@ -2522,16 +2527,17 @@ runs:
           cp "$OUT_DIR/vmlinux.symvers" "$OUT_DIR/Module.symvers"
           echo "seeded Module.symvers from vmlinux.symvers (modversions CRCs)"
         fi
-        BINDER_INC="$COMMON_KERNEL_FOLDER/drivers/android"
-        [ -f "$BINDER_INC/binder_internal.h" ] || echo "::warning::$BINDER_INC/binder_internal.h missing"
+        cp "$SRC"/*.c "$SRC"/*.h "$DEST"/
+        cat "$SRC/Makefile" >> "$DEST/Makefile"
+        echo "sources copied into $DEST"
         export PATH="$CLANG_BIN_PATH:$PATH"
         export ARCH=arm64 SUBARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu-
         export LLVM=1 LLVM_IAS=1 AR=llvm-ar NM=llvm-nm OBJCOPY=llvm-objcopy OBJDUMP=llvm-objdump STRIP=llvm-strip
-        export KCFLAGS="${KCFLAGS:-} -no-canonical-prefixes -fdiagnostics-color=never -Qunused-arguments -Wno-unused-command-line-argument -D__ANDROID_COMMON_KERNEL__ -I$BINDER_INC"
+        export KCFLAGS="${KCFLAGS:-} -no-canonical-prefixes -fdiagnostics-color=never -Qunused-arguments -Wno-unused-command-line-argument -D__ANDROID_COMMON_KERNEL__"
         export KCPPFLAGS="${KCPPFLAGS:-}"
-        echo "LKM env: ARCH=$ARCH LLVM=$LLVM CROSS_COMPILE=$CROSS_COMPILE"
         echo "---- build rekernel.ko ----"
-        if make -C "$COMMON_KERNEL_FOLDER" O="$OUT_DIR" M="$SRC" \
+        if make -C "$COMMON_KERNEL_FOLDER" O="$OUT_DIR" M="$DEST" \
+             CONFIG_REKERNEL=m REKERNEL_VERSION="$KERNEL_FULL_VER" CC="clang" \
              LD="$COMMON_KERNEL_FOLDER/ld-wrapper" HOSTLD="$COMMON_KERNEL_FOLDER/ld-wrapper" \
              -j"$(nproc --all)" modules > /tmp/lkm_build.log 2>&1; then
           echo "modules build: ok"
@@ -2540,15 +2546,15 @@ runs:
         fi
         tail -60 /tmp/lkm_build.log || true
         grep -m 10 -E "error:|Error [0-9]|undefined!" /tmp/lkm_build.log || true
-        KO=$(find "$SRC" -name 'rekernel.ko' | head -1)
+        KO=$(find "$DEST" "$OUT_DIR/drivers/android" -maxdepth 1 -name 'rekernel.ko' 2>/dev/null | head -1)
         if [ -z "$KO" ]; then
           echo "::warning::rekernel.ko not produced; no LKM artifact"
           echo "::endgroup::"
           exit 0
         fi
         echo "---- module info ----"
-        $CLANG_BIN_PATH/llvm-objcopy --version > /dev/null 2>&1 || true
-        strings "$KO" | grep -m 2 -E "^6\.6\.142|vermagic" || true
+        llvm-strip -d "$KO" 2>/dev/null || echo "::warning::llvm-strip -d failed"
+        strings "$KO" | grep -m 3 -E "6\.6\.142|vermagic|rekernel" || true
         PKG="$GITHUB_WORKSPACE/lkm_pkg"
         rm -rf "$PKG"
         mkdir -p "$PKG"
