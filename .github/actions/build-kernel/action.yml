@@ -2521,6 +2521,10 @@ runs:
           cp "$OUT_DIR/vmlinux.symvers" "$OUT_DIR/Module.symvers"
           echo "seeded Module.symvers from vmlinux.symvers (modversions CRCs)"
         fi
+        export ARCH=arm64 SUBARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu-
+        export KCFLAGS="${KCFLAGS:-} -no-canonical-prefixes -fdiagnostics-color=never -Qunused-arguments -Wno-unused-command-line-argument -D__ANDROID_COMMON_KERNEL__ -I$BINDER_INC"
+        export KCPPFLAGS="${KCPPFLAGS:-}"
+        echo "LKM build env: ARCH=$ARCH CROSS_COMPILE=$CROSS_COMPILE"
         echo "---- modules_prepare ----"
         if make -C "$COMMON_KERNEL_FOLDER" O="$OUT_DIR" modules_prepare > /tmp/lkm_prepare.log 2>&1; then
           echo "modules_prepare: ok"
@@ -2530,7 +2534,8 @@ runs:
         tail -5 /tmp/lkm_prepare.log || true
         echo "---- build rekernel.ko ----"
         if make -C "$COMMON_KERNEL_FOLDER" O="$OUT_DIR" M="$SRC" \
-             KCFLAGS="-I$BINDER_INC" -j"$(nproc --all)" modules > /tmp/lkm_build.log 2>&1; then
+             LD="$COMMON_KERNEL_FOLDER/ld-wrapper" HOSTLD="$COMMON_KERNEL_FOLDER/ld-wrapper" \
+             -j"$(nproc --all)" modules > /tmp/lkm_build.log 2>&1; then
           echo "modules build: ok"
         else
           echo "::warning::rekernel.ko build failed; log below"
