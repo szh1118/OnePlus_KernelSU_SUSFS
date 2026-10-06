@@ -38,7 +38,7 @@ will break module loading (the release string is part of the module ABI).
 | **CVE-2026-89839 / 80830 / 80842** (f2fs / USB hub / bridge) | ✅ patched **and compiled in** (`=y` subsystems) |
 | **CVE-2026-93235** (f2fs post-EOF stale data on size extension) | ✅ ported, **reproduced and fixed on device** (see below) |
 | **CVE-2026-90255 / 93209 / 80762** (kernel BT core) | ➖ **N/A on this device** — see [Bluetooth](#-bluetooth-on-this-rom) |
-| Droidspaces + NTSync | 🧪 **`OP13-full` only** — not yet device-verified |
+| Droidspaces + NTSync | ✅ **`OP13-full` only** — device-verified (module set identical to lite, `0` CRC mismatches) |
 | **Re:Kernel** v11.7 (tombstone / freeze support) | ✅ **built into the image** — `Re-Kernel hooked!` in dmesg |
 | **ADIOS** I/O scheduler | ✅ **built in and set as the default** (`[adios]` on every block device) |
 | NetHunter + rtw88 / monitor-mode injection | ⏳ planned (full) |
@@ -69,6 +69,21 @@ modules we blacklist on purpose, `zram`/`zsmalloc` are built into our image, and
 `can_*`, `tls`, `video`, `icnss2`, `kheaders`, … — simply never load on this device). Rollback is one
 flash away — keep the `lite` AK3 zip, or `fastboot flash boot_a/b` with the ROM's own `boot.img`.
 
+**Result (2026-10-07, `OP13-full` on device):** no `disagrees about version of symbol` in dmesg, and the
+loaded-module set is **byte-for-byte the same names** as on `lite-r13` (548 of 589). Wi-Fi (associated +
+got a DHCP lease), cellular data (NR, validated), Bluetooth (`State: ON`), NFC (`mState=on`), camera HAL
+(5 devices) all work; `logcat -b crash` is empty; no avc denial involves `ntsync`/`sysvipc`/namespaces.
+The `lite` features survived too: `[adios]` still the default scheduler, `baseband_guard` in the LSM
+chain, `Re-Kernel hooked!`, zram0 6 GB `[lz4]`.
+
+> Two things worth knowing when you verify a flash yourself:
+> - `/proc/config.gz` is **faked** here (the "Fake config.gz" patch keeps it matching the stock ROM), so
+>   confirm new features through runtime gates instead: `/proc/sysvipc/{msg,sem,shm}`, `/dev/ntsync`
+>   (labelled `gpu_device` by the ROM's own `file_contexts`), `/proc/sys/user/max_user_namespaces`.
+> - A recovery UI printing "success" is not evidence. Check the slot: `sha256sum /dev/block/by-name/boot_a`
+>   vs `boot_b` vs the ROM's `boot.img`, and compare `cat /proc/version`'s build timestamp with the one
+>   embedded in the `Image` you downloaded from the workflow run.
+
 ## 📋 TODO
 
 - [x] Build from the ROM's own kernel tree so `uname -r` / vermagic match it exactly
@@ -83,7 +98,10 @@ flash away — keep the `lite` AK3 zip, or `fastboot flash boot_a/b` with the RO
 - [x] Re:Kernel — **compiled into the kernel image** (`obj-y` in `drivers/android/`). The out-of-tree `.ko` route cannot work here: with `O=` set, kbuild's `Makefile.modfinal` never gets a rule for the final `.ko` (`No rule to make target rekernel.ko, needed by '__modfinal'`). Built-in also removes the runtime dependency on `kallsyms_lookup_name` being exported.
 - [x] ADIOS — `patches/adios/adios-6.6.patch` (6.12→6.6: only `elevator_find_get(q, name)` and `!blk_queue_nonrot(q)` differ), built-in and set as default
 - [x] **lite** = KSU + SUSFS + BBG + unicode/ip_set/ttl + zram + Re:Kernel + ADIOS — **verified on device**: `[adios]` default, zram `[lz4]`, `baseband_guard` in the LSM chain, `Re:Kernel v11.7 … Re-Kernel hooked!`
-- [ ] **full** = lite + Droidspaces/NTSync + NetHunter/rtw88 + KPM + LZ4KD — Droidspaces/NTSync are in `OP13-full` **now, building**; the other three groups go in later rounds, one at a time (NetHunter/wireless is the riskiest and stays on its own round). KPM needs a decision first: KernelPatch Next alongside KernelSU-Next is a root-solution conflict, not just another patch.
+- [x] **full** round 1 — Droidspaces + NTSync: built as `OP13-full`, flashed, **device-verified** (see [Two variants](#-two-variants--op13-lite-and-op13-full))
+- [ ] **full** round 2 — NetHunter + rtw88 / monitor-mode injection (riskiest group, own round)
+- [ ] **full** round 3 — LZ4KD zram algorithm (experimental)
+- [ ] KPM (KernelPatch Next) — **needs a decision**: it is a second root solution, not just another patch
 - [x] Split the build matrix into `OP13-lite` / `OP13-full` configs (see [Two variants](#-two-variants--op13-lite-and-op13-full))
 - [x] ~~Switch the root solution to BakaSU/SukiSU~~ — **dropped**: the SUSFS patches do not apply to BakaSU's tree (94 / 97 failed hunks), and SUSFS is not negotiable
 - [x] ~~HMBIRD~~ — **dropped**: no fengchi SCX source in this tree
