@@ -38,13 +38,36 @@ will break module loading (the release string is part of the module ABI).
 | **CVE-2026-89839 / 80830 / 80842** (f2fs / USB hub / bridge) | ✅ patched **and compiled in** (`=y` subsystems) |
 | **CVE-2026-93235** (f2fs post-EOF stale data on size extension) | ✅ ported, **reproduced and fixed on device** (see below) |
 | **CVE-2026-90255 / 93209 / 80762** (kernel BT core) | ➖ **N/A on this device** — see [Bluetooth](#-bluetooth-on-this-rom) |
-| Droidspaces + NTSync | ⏳ planned (full) |
+| Droidspaces + NTSync | 🧪 **`OP13-full` only** — not yet device-verified |
 | **Re:Kernel** v11.7 (tombstone / freeze support) | ✅ **built into the image** — `Re-Kernel hooked!` in dmesg |
 | **ADIOS** I/O scheduler | ✅ **built in and set as the default** (`[adios]` on every block device) |
 | NetHunter + rtw88 / monitor-mode injection | ⏳ planned (full) |
 | KPM (KernelPatch Next) | ⏳ planned (full) |
 | LZ4KD zram algorithm (experimental) | ⏳ planned (full) |
 | HMBIRD (OnePlus fengchi SCX) | ❌ **not possible** — the scheduler source does not exist in this tree |
+
+## 🔀 Two variants — `OP13-lite` and `OP13-full`
+
+The build matrix is generated from **every** `configs/**/*.json`, so one dispatch of
+`op_model=android15-6.6` builds both as independent jobs:
+
+| Config | Contents |
+|---|---|
+| [`configs/a16/OP13-lite.json`](configs/a16/OP13-lite.json) | Everything marked ✅ above. **This is the daily-driver build** and what Releases ship. |
+| [`configs/a16/OP13-full.json`](configs/a16/OP13-full.json) | lite **+ Droidspaces (`ds`) + NTSync (`ntsync`)**, and later NetHunter/rtw88, KPM, LZ4KD — one group added per round. |
+
+⚠️ `full` is **not** automatically safe to flash: Droidspaces flips five options the stock ROM leaves
+off (`CONFIG_SYSVIPC`, `CONFIG_POSIX_MQUEUE`, `CONFIG_USER_NS`, `CONFIG_PID_NS`, `CONFIG_DEVTMPFS`), and
+`CONFIG_SYSVIPC` changes the layout of `struct ipc_namespace`. Because module CRCs (genksyms) hash the
+transitive type closure of each exported prototype, a Kconfig flip can silently make a `vendor_dlkm`
+`.ko` unloadable — that is exactly how `CONFIG_BPF_STREAM_PARSER` once broke `bluetooth.ko` here.
+
+So a `full` build is accepted only after the **module-load comparison**: boot it, then check that
+dmesg still has no `disagrees about version of symbol` lines and that the set of loaded modules has not
+shrunk versus the `lite` baseline (548 of the 589 shipped `.ko` load on `lite-r13`: 21 are the debug
+modules we blacklist on purpose, `zram`/`zsmalloc` are built into our image, and the remaining ~20 —
+`can_*`, `tls`, `video`, `icnss2`, `kheaders`, … — simply never load on this device). Rollback is one
+flash away — keep the `lite` AK3 zip, or `fastboot flash boot_a/b` with the ROM's own `boot.img`.
 
 ## 📋 TODO
 
@@ -60,8 +83,8 @@ will break module loading (the release string is part of the module ABI).
 - [x] Re:Kernel — **compiled into the kernel image** (`obj-y` in `drivers/android/`). The out-of-tree `.ko` route cannot work here: with `O=` set, kbuild's `Makefile.modfinal` never gets a rule for the final `.ko` (`No rule to make target rekernel.ko, needed by '__modfinal'`). Built-in also removes the runtime dependency on `kallsyms_lookup_name` being exported.
 - [x] ADIOS — `patches/adios/adios-6.6.patch` (6.12→6.6: only `elevator_find_get(q, name)` and `!blk_queue_nonrot(q)` differ), built-in and set as default
 - [x] **lite** = KSU + SUSFS + BBG + unicode/ip_set/ttl + zram + Re:Kernel + ADIOS — **verified on device**: `[adios]` default, zram `[lz4]`, `baseband_guard` in the LSM chain, `Re:Kernel v11.7 … Re-Kernel hooked!`
-- [ ] **full** = lite + Droidspaces/NTSync + NetHunter/rtw88 + KPM + LZ4KD
-- [ ] Split the build matrix into `OP13-lite` / `OP13-full` configs
+- [ ] **full** = lite + Droidspaces/NTSync + NetHunter/rtw88 + KPM + LZ4KD — Droidspaces/NTSync are in `OP13-full` **now, building**; the other three groups go in later rounds, one at a time (NetHunter/wireless is the riskiest and stays on its own round). KPM needs a decision first: KernelPatch Next alongside KernelSU-Next is a root-solution conflict, not just another patch.
+- [x] Split the build matrix into `OP13-lite` / `OP13-full` configs (see [Two variants](#-two-variants--op13-lite-and-op13-full))
 - [x] ~~Switch the root solution to BakaSU/SukiSU~~ — **dropped**: the SUSFS patches do not apply to BakaSU's tree (94 / 97 failed hunks), and SUSFS is not negotiable
 - [x] ~~HMBIRD~~ — **dropped**: no fengchi SCX source in this tree
 
