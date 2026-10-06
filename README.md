@@ -36,6 +36,7 @@ will break module loading (the release string is part of the module ABI).
 | **IP_SET + IPv6 NAT**, **TTL target** | ✅ |
 | **zram**: built-in, **LZ4** default, ZSTD available, multi-comp streams | ✅ verified on device (`[lz4]`, 6 GB swap) |
 | **CVE-2026-89839 / 80830 / 80842** (f2fs / USB hub / bridge) | ✅ patched **and compiled in** (`=y` subsystems) |
+| **CVE-2026-93235** (f2fs post-EOF stale data on size extension) | ✅ ported, **reproduced and fixed on device** (see below) |
 | **CVE-2026-90255 / 93209 / 80762** (kernel BT core) | ➖ **N/A on this device** — see [Bluetooth](#-bluetooth-on-this-rom) |
 | Droidspaces + NTSync | ⏳ planned (full) |
 | **Re:Kernel** v11.7 (tombstone / freeze support) | ✅ **built into the image** — `Re-Kernel hooked!` in dmesg |
@@ -55,7 +56,7 @@ will break module loading (the release string is part of the module ABI).
 - [x] zram built-in with LZ4 default + multi-comp — **verified on device**
 - [x] CVE backports `89839 / 80830 / 80842` — **patched *and* compiled into the image** (`=y` subsystems)
 - [x] CVE `90255 / 93209 / 80762` — **not applicable here**: they live in the *kernel* BT core, which this ROM never uses (see below)
-- [ ] CVE-2026-93235 (f2fs post-EOF zeroing) — our 6.6.142 snapshot lacks the prerequisite `f2fs_zero_post_eof_page()` series entirely (fixed upstream in 6.6.157), so this is not a one-patch backport; **deliberately not applied**
+- [x] CVE-2026-93235 (f2fs: zero post-EOF data when extending file size) — **fixed here**. Our f2fs is the AOSP/OnePlus variant and never had upstream's `f2fs_zero_post_eof_page()`, so the stable backports do not apply (all five branches fail every hunk). `patches/cve/CVE-2026-93235.patch` ports upstream's post-fix implementation on top of the existing `fill_zero()` and calls it from the same eight sites. Reproduced first and verified after, both with a raw-PBA test on a zram-backed f2fs device: before the fix `truncate-up` exposed the stale `0x5a` bytes in `[4080,4096)`, after it the gap reads zeros. See the patch comment for the one deliberate deviation from upstream (`/data` is mounted `fsync_mode=nobarrier`, so the zeroing must not be gated on strict mode or on cached pages).
 - [x] Re:Kernel — **compiled into the kernel image** (`obj-y` in `drivers/android/`). The out-of-tree `.ko` route cannot work here: with `O=` set, kbuild's `Makefile.modfinal` never gets a rule for the final `.ko` (`No rule to make target rekernel.ko, needed by '__modfinal'`). Built-in also removes the runtime dependency on `kallsyms_lookup_name` being exported.
 - [x] ADIOS — `patches/adios/adios-6.6.patch` (6.12→6.6: only `elevator_find_get(q, name)` and `!blk_queue_nonrot(q)` differ), built-in and set as default
 - [x] **lite** = KSU + SUSFS + BBG + unicode/ip_set/ttl + zram + Re:Kernel + ADIOS — **verified on device**: `[adios]` default, zram `[lz4]`, `baseband_guard` in the LSM chain, `Re:Kernel v11.7 … Re-Kernel hooked!`
@@ -84,6 +85,26 @@ build prints a `CONFIG PARITY vs ROM baseline` diff so silent config drift shows
 **Consequence:** CVE-2026-90255 / 93209 / 80762 target `net/bluetooth/*.c`, i.e. a code path this
 device does not execute — building the BT core into the image just to "fix" them would add code that
 never runs. They are documented as N/A rather than patched.
+
+## 🧪 Verifying the f2fs post-EOF fix (CVE-2026-93235)
+
+The reproduction follows upstream's own fstests `generic/794` sequence, but on a **zram-backed**
+f2fs device so nothing touches `/data`:
+
+```
+create a zram device (echo N > /sys/class/zram-control/hot_add), make_f2fs it, mount it
+write 1 MiB of 0x5a with a unique marker at file offset 16
+find the file's first block by scanning the device for the marker
+truncate the file to 4080, umount
+write 4096 x 0x5a straight at that block      # the "stale bytes" the CVE is about
+mount again, extend the file to 8192
+read [4080,4096)  ->  all zeros = fixed, 0x5a = vulnerable
+```
+
+Notes for anyone repeating this: a loop-over-file device cannot work here — the kernel is not
+allowed to *write* a regular file (`u:r:kernel:s0` gets EIO on the backing file), which leaves an
+un-unmountable f2fs and can wedge the device. Use zram, guard every `umount` with `timeout`, and
+never leave a broken mount behind.
 
 ## 🔍 Verifying a build on the device
 
