@@ -191,6 +191,42 @@ stock boot image.
 - **AK3**: the `boot`-version check is disabled (`do.check_boot_version=0`) because it only recognises
   `-androidNN` style version strings, which this ROM does not use.
 
+## 📋 优化 TODO / 待办
+
+> 2026-07-11 分析结论。按优先级排列。
+
+### P0 — 高收益、低风险
+
+- [ ] **opt 优化补丁逐个测试**：当前 "opt": false，全部跳过。WildKernels 上游补丁针对 OnePlusOSS 树，本树是 LineageOS/AOSP 树，全开会卡 logo。应逐个启用测试，安全的留下，卡 logo 的丢弃。优先测试低风险补丁：educe_gc_thread_sleep_time、silence_irq_cpu_logspam、increase_sk_mem_packets、educe_freeze_timeout。
+- [ ] **Droidspaces + NTSync 合入 lite**：当前只在 OP13-full 里。如果日常使用需要，考虑移到 OP13-lite。
+- [ ] **zram 压缩算法测试 ZSTD**：当前 LZ4 最快但压缩率最低。ZSTD 压缩率高 30-40%，swap 空间更大。对手机 RAM 扩展场景，压缩率可能比速度更重要。
+
+### P1 — 中等收益
+
+- [ ] **源码下载缓存**：当前每次构建都重新下载内核源码。可用 ctions/cache 按 manifest revision 缓存，revision 不变时跳过下载。注意不要影响上游更新追踪。
+- [ ] **考虑 sccache 替代 ccache**：sccache 为 CI 设计，并行性更好，迁移成本低（改环境变量即可）。
+- [ ] **BBR/BBR3**：日用场景收益小，主要收益在热点共享/高延迟网络。当前不开是对的，保持现状。
+
+### P2 — 低优先级 / 高工作量
+
+- [ ] **ThinLTO**：ld-wrapper 已写好 --thinlto-jobs，但会改变符号表影响 vendor 模块 CRC。收益 1-3%，风险高，不建议。
+- [ ] **SCX 调度器移植**：内核 6.10+ 才有 SCX 框架，backport 到 6.6 工作量巨大，性价比低。
+- [ ] **HMBIRD (fengchi)**：OnePlus 闭源 OEM 调度器，源码不在公开树里，无法使用。
+- [ ] **编译器额外标志**（-falign-jump=32、-falign-functions=32 等）：内核非计算密集型，收益极小，不建议折腾。
+
+### 已确认不需要 / 不做
+
+| 方向 | 结论 | 原因 |
+|---|---|---|
+| opt: true 全开 | ❌ | 卡 logo，LineageOS 树与补丁不兼容 |
+| BBR 日用 | ❌ | 仅热点/高延迟网络有益，日用无收益 |
+| ThinLTO | ❌ | 模块 CRC 风险 > 1-3% 收益 |
+| SCX 移植 | ❌ | 工作量巨大，6.6 无 SCX 框架 |
+| HMBIRD | ❌ | 闭源，源码不可得 |
+| 编译器标志调优 | ❌ | ZyCromerZ clang 22 已足够新，内核非计算密集型 |
+| ADIOS I/O 调度器 | ✅ 已启用 | 块 I/O 层面已覆盖，与 CPU 调度器不冲突 |
+
+---
 ## 🙏 Credits
 
 [WildKernels](https://github.com/WildKernels) (pipeline), [KernelSU-Next](https://github.com/KernelSU-Next/KernelSU-Next),
