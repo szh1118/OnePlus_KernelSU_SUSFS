@@ -197,7 +197,7 @@ stock boot image.
 
 ### P0 — 高收益、低风险
 
-- [ ] **opt 优化补丁逐个测试**：当前 `"opt": false`，全部跳过。WildKernels 上游补丁针对 OnePlusOSS 树，本树是 LineageOS/AOSP 树，全开会卡 logo。应逐个启用测试，安全的留下，卡 logo 的丢弃。优先测试低风险补丁：reduce_gc_thread_sleep_time、silence_irq_cpu_logspam、increase_sk_mem_packets、reduce_freeze_timeout。
+- [ ] **`opt` 优化补丁逐个测试**：当前 `"opt": false`，全部跳过。WildKernels 上游补丁针对 OnePlusOSS 树，本树是 LineageOS/AOSP 树，全开会卡 logo。应逐个启用测试，安全的留下，卡 logo 的丢弃。优先测试低风险补丁：reduce_gc_thread_sleep_time、silence_irq_cpu_logspam、increase_sk_mem_packets、reduce_freeze_timeout。
 - [ ] **Droidspaces + NTSync 合入 lite**：当前只在 `OP13-full` 里。如果日常使用需要，考虑移到 `OP13-lite`。
 - [ ] **zram 压缩算法测试 ZSTD**：当前 LZ4 最快但压缩率最低。ZSTD 压缩率高 30-40%，swap 空间更大。对手机 RAM 扩展场景，压缩率可能比速度更重要。
 
@@ -218,7 +218,7 @@ stock boot image.
 
 | 方向 | 结论 | 原因 |
 |---|---|---|
-| opt: true 全开 | ❌ | 卡 logo，LineageOS 树与补丁不兼容 |
+| `opt: true` 全开 | ❌ | 卡 logo，LineageOS 树与补丁不兼容 |
 | BBR 日用 | ❌ | 仅热点/高延迟网络有益，日用无收益 |
 | ThinLTO | ❌ | 模块 CRC 风险 > 1-3% 收益 |
 | SCX 移植 | ❌ | 工作量巨大，6.6 无 SCX 框架 |
