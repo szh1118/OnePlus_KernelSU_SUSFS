@@ -2513,25 +2513,23 @@ runs:
           exit 0
         fi
         echo "LKM source: $SRC"
-        BINDER_INC="$COMMON_KERNEL_FOLDER/drivers/android"
-        if [ ! -f "$BINDER_INC/binder_internal.h" ]; then
-          echo "::warning::$BINDER_INC/binder_internal.h missing"
+        if [ ! -f "$OUT_DIR/include/config/auto.conf" ] || [ ! -f "$OUT_DIR/include/generated/autoconf.h" ]; then
+          echo "::warning::kernel build output looks unprepared ($OUT_DIR); no LKM artifact"
+          echo "::endgroup::"
+          exit 0
         fi
         if [ ! -f "$OUT_DIR/Module.symvers" ] && [ -f "$OUT_DIR/vmlinux.symvers" ]; then
           cp "$OUT_DIR/vmlinux.symvers" "$OUT_DIR/Module.symvers"
           echo "seeded Module.symvers from vmlinux.symvers (modversions CRCs)"
         fi
+        BINDER_INC="$COMMON_KERNEL_FOLDER/drivers/android"
+        [ -f "$BINDER_INC/binder_internal.h" ] || echo "::warning::$BINDER_INC/binder_internal.h missing"
+        export PATH="$CLANG_BIN_PATH:$PATH"
         export ARCH=arm64 SUBARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu-
+        export LLVM=1 LLVM_IAS=1 AR=llvm-ar NM=llvm-nm OBJCOPY=llvm-objcopy OBJDUMP=llvm-objdump STRIP=llvm-strip
         export KCFLAGS="${KCFLAGS:-} -no-canonical-prefixes -fdiagnostics-color=never -Qunused-arguments -Wno-unused-command-line-argument -D__ANDROID_COMMON_KERNEL__ -I$BINDER_INC"
         export KCPPFLAGS="${KCPPFLAGS:-}"
-        echo "LKM build env: ARCH=$ARCH CROSS_COMPILE=$CROSS_COMPILE"
-        echo "---- modules_prepare ----"
-        if make -C "$COMMON_KERNEL_FOLDER" O="$OUT_DIR" modules_prepare > /tmp/lkm_prepare.log 2>&1; then
-          echo "modules_prepare: ok"
-        else
-          echo "::warning::modules_prepare returned non-zero"
-        fi
-        tail -5 /tmp/lkm_prepare.log || true
+        echo "LKM env: ARCH=$ARCH LLVM=$LLVM CROSS_COMPILE=$CROSS_COMPILE"
         echo "---- build rekernel.ko ----"
         if make -C "$COMMON_KERNEL_FOLDER" O="$OUT_DIR" M="$SRC" \
              LD="$COMMON_KERNEL_FOLDER/ld-wrapper" HOSTLD="$COMMON_KERNEL_FOLDER/ld-wrapper" \
@@ -2541,13 +2539,16 @@ runs:
           echo "::warning::rekernel.ko build failed; log below"
         fi
         tail -60 /tmp/lkm_build.log || true
-        grep -m 10 -E "error:|Error [0-9]|fatal error" /tmp/lkm_build.log || true
+        grep -m 10 -E "error:|Error [0-9]|undefined!" /tmp/lkm_build.log || true
         KO=$(find "$SRC" -name 'rekernel.ko' | head -1)
         if [ -z "$KO" ]; then
           echo "::warning::rekernel.ko not produced; no LKM artifact"
           echo "::endgroup::"
           exit 0
         fi
+        echo "---- module info ----"
+        $CLANG_BIN_PATH/llvm-objcopy --version > /dev/null 2>&1 || true
+        strings "$KO" | grep -m 2 -E "^6\.6\.142|vermagic" || true
         PKG="$GITHUB_WORKSPACE/lkm_pkg"
         rm -rf "$PKG"
         mkdir -p "$PKG"
